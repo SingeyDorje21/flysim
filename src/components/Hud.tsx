@@ -73,8 +73,13 @@ export function Hud() {
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="hud-topright">
+      {/*
+        Right-hand column: one flowing stack, so nothing can overlap. On short
+        screens it wraps into a second column to the left instead.
+      */}
+      <div className="hud-rightcol">
           {c && (
             <div className={`hud-challenge status-${c.status}`} data-testid="challenge">
               <div className="challenge-objective">{c.objective}</div>
@@ -97,6 +102,58 @@ export function Hud() {
               </div>
             </div>
           )}
+        <div className="hud-box hud-right">
+          <div className="hud-label">ALTITUDE</div>
+          <div className="hud-big" data-testid="hud-altitude">
+            {formatAltitude(t.altitude, units)}
+          </div>
+          {lowAgl && (
+            <div className="hud-row agl">
+              <span>AGL</span>
+              <span data-testid="hud-agl">{formatAltitude(t.heightAboveGround, units)}</span>
+            </div>
+          )}
+          <div className="hud-row">
+            <span>V/S</span>
+            <span data-testid="hud-vs">{formatVerticalSpeed(t.verticalSpeed, units)}</span>
+          </div>
+          <div className="hud-row">
+            <span>PITCH</span>
+            <span>{Math.round(t.pitchDeg)}&deg;</span>
+          </div>
+          <div className="hud-row">
+            <span>BANK</span>
+            <span>{Math.round(t.bankDeg)}&deg;</span>
+          </div>
+        </div>
+
+        <div className="hud-box hud-engine">
+          <div className="hud-row">
+            <span>THR</span>
+            <span data-testid="hud-throttle">{Math.round(t.throttle * 100)}%</span>
+          </div>
+          <div className="hud-meter" aria-hidden="true">
+            <div style={{ width: `${Math.min(1, Math.max(0, t.throttle)) * 100}%` }} />
+          </div>
+          <div className="hud-row">
+            <span>RPM</span>
+            <span>{Math.round(t.rpm)}</span>
+          </div>
+          <div className="hud-row">
+            <span>FLAPS</span>
+            <span data-testid="hud-flaps">{flapsLabel}</span>
+          </div>
+          <div className="hud-row">
+            <span>BRAKES</span>
+            <span className={t.brakes > 0.05 ? 'on' : ''}>{t.brakes > 0.05 ? `${Math.round(t.brakes * 100)}%` : 'OFF'}</span>
+          </div>
+          <div className="hud-row">
+            <span>TRIM</span>
+            <span>{t.trim > 0 ? '+' : ''}{(t.trim * 100).toFixed(0)}%</span>
+          </div>
+        </div>
+
+        <div className="hud-navgroup">
           <Minimap />
           {nav.nearest && (
             <div className="hud-nav" data-testid="hud-nav">
@@ -138,57 +195,6 @@ export function Hud() {
         <div className="hud-row">
           <span>G</span>
           <span>{t.gForce.toFixed(1)}</span>
-        </div>
-      </div>
-
-      <div className="hud-box hud-right">
-        <div className="hud-label">ALTITUDE</div>
-        <div className="hud-big" data-testid="hud-altitude">
-          {formatAltitude(t.altitude, units)}
-        </div>
-        {lowAgl && (
-          <div className="hud-row agl">
-            <span>AGL</span>
-            <span data-testid="hud-agl">{formatAltitude(t.heightAboveGround, units)}</span>
-          </div>
-        )}
-        <div className="hud-row">
-          <span>V/S</span>
-          <span data-testid="hud-vs">{formatVerticalSpeed(t.verticalSpeed, units)}</span>
-        </div>
-        <div className="hud-row">
-          <span>PITCH</span>
-          <span>{Math.round(t.pitchDeg)}&deg;</span>
-        </div>
-        <div className="hud-row">
-          <span>BANK</span>
-          <span>{Math.round(t.bankDeg)}&deg;</span>
-        </div>
-      </div>
-
-      <div className="hud-box hud-engine">
-        <div className="hud-row">
-          <span>THR</span>
-          <span data-testid="hud-throttle">{Math.round(t.throttle * 100)}%</span>
-        </div>
-        <div className="hud-meter" aria-hidden="true">
-          <div style={{ width: `${Math.min(1, Math.max(0, t.throttle)) * 100}%` }} />
-        </div>
-        <div className="hud-row">
-          <span>RPM</span>
-          <span>{Math.round(t.rpm)}</span>
-        </div>
-        <div className="hud-row">
-          <span>FLAPS</span>
-          <span data-testid="hud-flaps">{flapsLabel}</span>
-        </div>
-        <div className="hud-row">
-          <span>BRAKES</span>
-          <span className={t.brakes > 0.05 ? 'on' : ''}>{t.brakes > 0.05 ? `${Math.round(t.brakes * 100)}%` : 'OFF'}</span>
-        </div>
-        <div className="hud-row">
-          <span>TRIM</span>
-          <span>{t.trim > 0 ? '+' : ''}{(t.trim * 100).toFixed(0)}%</span>
         </div>
       </div>
 

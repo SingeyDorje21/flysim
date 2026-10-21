@@ -42,7 +42,8 @@
 
 .hud-challenge {
   min-width: 220px;
-  max-width: min(420px, 100%);
+  /* Narrow enough to stay clear of the centred heading tape at 1024 px. */
+  max-width: min(280px, 100%);
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
@@ -89,8 +90,17 @@
   top: 64px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(360px, 50vw);
+  /* Centred, never wider than the gap between the side columns (280 px challenge + margins each side). */
+  width: min(360px, calc(100vw - 608px));
+  min-width: 200px;
   height: 40px;
+}
+
+/* Narrow screens: slimmer challenge panel, no minimap (the nav readout stays). */
+@media (max-width: 900px) {
+  .hud-challenge { max-width: 220px; min-width: 0; }
+  .hud-tape { width: min(360px, calc(100vw - 488px)); }
+  .hud-minimap { display: none; }
 }
 .tape-window {
   position: absolute;
@@ -126,9 +136,6 @@
   font-size: 0.8rem;
 }
 .hud-left { left: 12px; }
-.hud-right { right: 12px; }
-.hud-engine { right: 12px; top: auto; bottom: 12px; }
-.with-instruments .hud-engine { bottom: 190px; }
 .hud-label { font-size: 0.65rem; letter-spacing: 0.12em; opacity: 0.7; }
 .hud-big { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
 .hud-row { display: flex; justify-content: space-between; gap: 12px; }
@@ -173,7 +180,6 @@
 
 /* Short screens: keep the engine box and command list clear of the side boxes. */
 @media (max-height: 560px) {
-  .hud-engine { display: none; }
   .with-instruments .hud-commands { display: none; }
 }
 
@@ -185,14 +191,29 @@
   .hud-challenge { min-width: 0; }
 }
 
-/* Top-right column: challenge, minimap, nav readout. */
-.hud-topright {
+/*
+ * Right-hand column: challenge, altitude, engine, minimap and nav readout in
+ * one flow, so they can never overlap. When the column runs out of height it
+ * wraps into a second column to its left (wrap-reverse) rather than spilling
+ * over the instrument panel.
+ */
+.hud-rightcol {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  flex-wrap: wrap-reverse;
+  /* wrap-reverse makes cross-start the RIGHT edge: pack lines and items against it. */
+  align-content: flex-start;
+  align-items: flex-start;
   gap: 8px;
-  margin-left: auto;
+  pointer-events: none;
 }
+.with-instruments .hud-rightcol { bottom: 190px; }
+.hud-rightcol .hud-box { position: static; }
+.hud-navgroup { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .hud-minimap {
   width: 140px;
   height: 140px;
