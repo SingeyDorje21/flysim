@@ -2,9 +2,11 @@
  * Airbus A350-900. Published: MTOW 283 t, wing 442 m^2, span 64.75 m,
  * 2 x Trent XWB-84 (370 kN), cruise Mach 0.85, MMO 0.89, ceiling 43,100 ft.
  *
- * GAME WEIGHT: 80 % of MTOW = 226,400 kg (typical long-haul departure weight).
- * Aerodynamics are estimates sized to the catalog speeds: clean CLmax 1.57
- * (1 g clean stall ~72 m/s), CONF 1+F (lever 1/3) CLmax ~2.35, full flap ~2.8.
+ * GAME WEIGHT: MTOW = 283,000 kg, so the take-off reproduces the published
+ * 2,600 m field length (measured: lift-off ~1,950 m, 35 ft at ~2,220 m,
+ * x 1.15 = ~2,560 m). At 80 % MTOW it lifted off in ~1,500 m.
+ * Aerodynamics are estimates: clean CLmax 1.57 (1 g clean stall ~72 m/s at
+ * 80 % MTOW, ~80 m/s at MTOW), CONF 1+F (lever 1/3) CLmax ~2.35, full flap ~2.8.
  */
 
 import { getAircraft } from '../aircraftCatalog'
@@ -20,7 +22,7 @@ import { AIRLINER_FBW, HIGH_BYPASS_LAPSE } from './shared'
 const DEG = Math.PI / 180
 const INFO = getAircraft('a350')
 const G = INFO.geometry
-export const A350_MASS = 0.8 * 283_000
+export const A350_MASS = 283_000
 
 export const A350_CONFIG: AircraftConfig & { engine: TurbofanEngineConfig } = {
   id: 'a350',

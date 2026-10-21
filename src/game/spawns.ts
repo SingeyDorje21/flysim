@@ -38,6 +38,9 @@ export function spawnFor(mode: GameMode, place: FlightPlace, aircraftId: Aircraf
     const toAim = FINAL_DISTANCE + Math.hypot(end.aimPoint.x - end.threshold.x, end.aimPoint.z - end.threshold.z)
     return {
       ...SPAWNS.landing,
+      // Fly-by-wire jets read pitchDeg as the flight-path angle, so they start
+      // established on the glide path; the trainer keeps a level nose attitude.
+      pitchDeg: jet ? -GLIDE_SLOPE_DEG : SPAWNS.landing.pitchDeg,
       airspeed: ac.speeds.approach,
       flaps: ac.landingFlaps,
       throttle: jet ? 0.45 : SPAWNS.landing.throttle,

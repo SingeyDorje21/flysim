@@ -80,14 +80,12 @@ function stallEas(id: AircraftId) {
   return result as { eas: number; g: number }
 }
 
-describe('A350-900 (226.4 t)', () => {
-  it('take-off with flaps 1/3: lifts off well inside the 2,600 m runway class', () => {
+describe('A350-900 (283 t, MTOW)', () => {
+  it('take-off with flaps 1/3 at MTOW lifts off in 1,800-2,800 m (published field length 2,600 m)', () => {
     const r = takeoff('a350')
     expect(r.crashed).toBe(false)
-    // Requested band 1,800-2,800 m. Measured ~1,490 m: at 80 % MTOW with 2 x 370 kN the
-    // physics lifts off sooner than the published MTOW figure (validated below), so only
-    // the upper bound is held here. Longer rolls need a heavier game weight.
-    expect(r.liftoff).toBeGreaterThan(1300)
+    // Measured ~1,950 m lift-off; 35 ft at ~2,220 m, x 1.15 = ~2,560 m field length.
+    expect(r.liftoff).toBeGreaterThan(1800)
     expect(r.liftoff).toBeLessThan(2800)
     expect(r.liftoffSpeed).toBeGreaterThan(getAircraft('a350').speeds.rotate)
   }, 30000)
@@ -107,8 +105,9 @@ describe('A350-900 (226.4 t)', () => {
     expect(Math.abs(r.eas / vs - 1)).toBeLessThan(0.12)
   }, 30000)
 
-  it('cruise thrust at 11 km settles at Mach 0.82-0.87', () => {
-    const m = levelMach('a350', 11000, CRUISE_THROTTLE)
+  it('cruise thrust at 11 km settles at Mach 0.82-0.87 (mid-flight weight, 80 % MTOW)', () => {
+    // The game weight is MTOW for a realistic take-off; nobody cruises at 11 km at MTOW.
+    const m = levelMach('a350', 11000, CRUISE_THROTTLE, { ...AIRCRAFT_CONFIGS.a350, mass: 0.8 * 283_000 })
     expect(m).toBeGreaterThanOrEqual(0.82)
     expect(m).toBeLessThanOrEqual(0.87)
   }, 30000)

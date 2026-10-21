@@ -276,7 +276,9 @@ describe('landing gear', () => {
       const info = getAircraft(id)
       const sim = makeAircraft(
         id,
-        machSpawn(0, -info.geometry.gear.mainLeft.y + 0.3, { airspeed: info.speeds.approach, throttle: 0.3, gearUp: false, flaps: info.landingFlaps }),
+        // 1 m of clearance: heavy jets trim nose-up enough on approach that a
+        // smaller gap leaves the main wheels already touching at spawn.
+        machSpawn(0, -info.geometry.gear.mainLeft.y + 1.0, { airspeed: info.speeds.approach, throttle: 0.3, gearUp: false, flaps: info.landingFlaps }),
       )
       sim.state.velocity.y -= sink
       run(sim, 4, (s) => s.setControls({ throttle: 0 }), (s) => s.state.crashed)

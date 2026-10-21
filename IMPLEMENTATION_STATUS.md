@@ -68,8 +68,10 @@ three 0.186.1, @react-three/fiber 9.8.2 (no drei), zustand 5.0.15, Vitest 5.0.5,
   - piston, turbofan and afterburning engines; ISA atmosphere to 20 km; Mach drag rise;
   - retractable gear (refused on the ground), speed brakes, auto ground spoilers, reverse thrust;
   - fly-by-wire (airliners: bank and AoA protection; F-22: 9 g limit, thrust vectoring).
-- Calibrated against published data. Every target is met except one: the A350 lifts off in ~1,500 m at its 80%-MTOW
-  game weight (it matches the published 2,600 m at MTOW).
+- Calibrated against published data; all targets are met. The A350 flies at MTOW (283 t), so its take-off reproduces
+  the published 2,600 m field length: lift-off ~1,950 m, 35 ft at ~2,220 m, x1.15 = ~2,560 m.
+  Its speeds were raised for the weight (Vr 155 kt, approach 148 kt), and jets spawn on the 3° glide path.
+  Rotate gently: the heavy A350 tail-strikes at ~11° on the ground.
 - Procedural models for all four jets with gear, surface, nozzle and afterburner animation; per-aircraft cameras.
 - Hangar picker, inline map preview with runway-length warnings, HUD gear/N1/Mach/AB/SPD BRK/REV, per-aircraft
   instrument scales, jet engine sounds. Keys: G gear, V speed brake, Y reverse.

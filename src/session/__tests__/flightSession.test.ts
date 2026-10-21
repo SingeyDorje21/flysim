@@ -140,17 +140,18 @@ describe('FlightSession integration (real terrain, physics and challenge)', () =
     session.keyboard.keyDown('KeyG') // refused: weight on wheels
     session.keyboard.keyUp('KeyG')
     hold(session, 'KeyR', true)
-    let airborne = 0
     fly(
       session,
-      90,
-      () => {
-        hold(session, 'KeyS', s().airspeed > 77 && s().pitchDeg < 8)
-        if (!s().onGround) airborne += FRAME
-      },
-      () => airborne > 8,
+      120,
+      // Gentle rotation: a heavy A350 keeps pitching after the stick is released,
+      // and its tail strikes at ~11 deg on the ground.
+      () => hold(session, 'KeyS', s().airspeed > 80 && s().pitchDeg < 4),
+      () => s().heightAboveGround > 50,
     )
-    expect(airborne).toBeGreaterThan(8)
+    // Climbing away with the gear still down: the refused press was not latched.
+    const st = s()
+    const why = JSON.stringify({ crashed: st.crashReason, as: st.airspeed, pitch: st.pitchDeg, t: st.simTime, onGround: st.onGround })
+    expect(st.heightAboveGround, why).toBeGreaterThan(50)
     expect(s().controls.gear).toBe(1)
     expect(s().gearPosition).toBe(1)
     // Retracting in the air works.

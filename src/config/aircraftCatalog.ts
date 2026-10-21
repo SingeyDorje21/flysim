@@ -199,7 +199,8 @@ export const AIRCRAFT: readonly AircraftInfo[] = [
       { label: 'Ceiling', value: '43,100 ft' },
       { label: 'Take-off / landing distance', value: '2,600 m / 2,000 m' },
     ],
-    speeds: { stallClean: 70, rotate: 77, approach: 72, maxOperating: 175, maxMach: 0.89 },
+    // Flown at MTOW (283 t), so the speeds are the heavy-weight estimates.
+    speeds: { stallClean: 80, rotate: 80, approach: 76, maxOperating: 175, maxMach: 0.89 },
     minRunway: 2600,
     takeoffFlaps: 1 / 3,
     landingFlaps: 1,
