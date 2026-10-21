@@ -9,6 +9,8 @@ import {
   WORLD,
   type Rect,
 } from '../../config/world'
+import { HOME_AIRPORT_ID, getAirport } from '../../config/airports'
+import { airportLayout } from '../../game/airportGeometry'
 import { RING_COURSE } from '../../game/courses'
 import { ISLETS, LAKES, naturalHeightAt } from '../terrain/heightField'
 import { createTerrainSampler, getTerrainSampler } from '../terrain/terrainSampler'
@@ -202,7 +204,8 @@ describe('terrain sampler', () => {
   it('has small islands offshore, separated from the main island by water', () => {
     expect(ISLETS.length).toBeGreaterThanOrEqual(3)
     for (const s of ISLETS) {
-      expect(terrain.surfaceAt(s.x, s.z)).toBe('grass')
+      // Gull Island's runway sits on the north-west islet, so its centre may be paved.
+      expect(terrain.surfaceAt(s.x, s.z)).not.toBe('water')
       expect(terrain.heightAt(s.x, s.z)).toBeGreaterThan(20)
       for (let a = 0; a < 360; a += 10) {
         const rad = (a * Math.PI) / 180
@@ -245,9 +248,11 @@ describe('terrain sampler', () => {
     expect(nearMax).toBeLessThan(120)
   })
 
-  it('reports paved surface on the runway and apron, grass beside', () => {
+  it('reports paved surface on the central runway and apron, grass beside', () => {
+    const central = airportLayout(getAirport(HOME_AIRPORT_ID))
     for (let z = -790; z <= 790; z += 40) expect(terrain.surfaceAt(RUNWAY.centerX, z)).toBe('paved')
-    expect(terrain.surfaceAt(120, 120)).toBe('paved')
+    expect(terrain.surfaceAt(central.apron.cx, central.apron.cz)).toBe('paved')
+    expect(terrain.surfaceAt(central.taxiway.cx, central.taxiway.cz)).toBe('paved')
     expect(terrain.surfaceAt(-100, 0)).toBe('grass')
   })
 })

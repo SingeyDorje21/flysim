@@ -4,14 +4,16 @@
  * ground wherever the finest level of detail is drawn.
  *
  * Rules: grass only, gentle slopes, between the beach and a noisy treeline,
- * outside the airport zone (plus blend), the paved areas and the approach /
- * departure corridors. Density averages QualityProfile.treeDensity per km² of
+ * outside every airport's flat zone (plus half its blend), the paved areas,
+ * the first 3 km of every approach surface and the central field's old
+ * approach / departure corridors. Density averages QualityProfile.treeDensity per km² of
  * suitable land, clumped into woods by forestAt.
  */
 
 import { AIRPORT_BLEND, AIRPORT_FLAT_ZONE, APPROACH_CORRIDOR, DEPARTURE_CORRIDOR, WORLD, type Rect } from '../../config/world'
 import type { TerrainSampler } from '../../simulation/types'
 import { mulberry32 } from '../util/random'
+import { AIRPORT_SITES, APPROACH_HALF_WIDTH, FLAT_MARGIN, inBox } from './airportTerrain'
 import { drynessAt, forestAt } from './heightField'
 import { hash2, valueNoise2 } from './noise'
 
@@ -36,10 +38,33 @@ const NO_TREES: readonly Rect[] = [
   grow(DEPARTURE_CORRIDOR, 150),
 ]
 
+/** No trees this far out along each approach surface (m from the threshold)... */
+export const TREE_FREE_APPROACH = 3000
+/** ...nor this far outside the approach corridor or the flat zone (m). */
+const TREE_FREE_MARGIN = 150
+
 export function treesExcludedAt(x: number, z: number): boolean {
   for (let i = 0; i < NO_TREES.length; i++) {
     const r = NO_TREES[i]
     if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) return true
+  }
+  for (let i = 0; i < AIRPORT_SITES.length; i++) {
+    const s = AIRPORT_SITES[i]
+    if (!inBox(s.box, x, z)) continue
+    // Flat zone (plus margin and half the blend).
+    const fx = x - s.fcx
+    const fz = z - s.fcz
+    const grow = FLAT_MARGIN + s.blend * 0.5
+    if (Math.abs(fx * s.fdx + fz * s.fdz) <= s.flatHalfL + grow && Math.abs(fz * s.fdx - fx * s.fdz) <= s.flatHalfW + grow) {
+      return true
+    }
+    // The first TREE_FREE_APPROACH metres of both approach surfaces.
+    const ox = x - s.cx
+    const oz = z - s.cz
+    const out = Math.abs(ox * s.dx + oz * s.dz) - s.runwayHalf
+    if (out <= TREE_FREE_APPROACH + TREE_FREE_MARGIN && Math.abs(oz * s.dx - ox * s.dz) <= APPROACH_HALF_WIDTH + TREE_FREE_MARGIN) {
+      return true
+    }
   }
   return false
 }

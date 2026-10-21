@@ -14,22 +14,15 @@
  * - four eroded mountain ranges far from the airport, peaks ~1,800 m;
  * - three river valleys whose lower reaches are sea-level channels, and two
  *   sea-level lakes (the only water is the y = 0 plane);
- * - the airport plateau, approach / departure corridors and the ring course
+ * - the central field's approach / departure corridors, the ring course,
+ *   then every airport's approach surfaces and plateau (airportTerrain.ts)
  *   enforced last, padded by two grid cells so the triangulated grid obeys
  *   them exactly.
  */
 
-import {
-  AIRPORT_BLEND,
-  AIRPORT_FLAT_ZONE,
-  APPROACH_CORRIDOR,
-  DEPARTURE_CORRIDOR,
-  RUNWAY,
-  WORLD,
-  type Rect,
-} from '../../config/world'
+import { APPROACH_CORRIDOR, DEPARTURE_CORRIDOR, RUNWAY, WORLD, type Rect } from '../../config/world'
 import { RING_COURSE } from '../../game/courses'
-import { isPaved } from '../airportLayout'
+import { AIRPORT_SITES, APPROACH_CARVE_BASE, APPROACH_FADE, APPROACH_HALF_WIDTH, APPROACH_LENGTH, APPROACH_SLOPE, FLAT_MARGIN, PAD } from './airportTerrain'
 import { erodedFbm2, fbm2, gradNoise2, ridgedGrad2, smoothstep, valueNoise2 } from './noise'
 
 // ---------------------------------------------------------------- helpers
@@ -65,10 +58,6 @@ const S_MOIST = SEED + 73
 const R = WORLD.islandRadius
 const HALF_SIZE = WORLD.terrainSize / 2
 const ELEV = RUNWAY.elevation
-const STEP = WORLD.physicsGridStep
-
-/** Constraints are enforced on their region grown by this much, so every grid cell touching it obeys them. */
-const PAD = 2 * STEP
 
 /** Upper bound of the natural height (m); used for LOD distance and tests. */
 export const TERRAIN_MAX_HEIGHT = 2000
@@ -87,19 +76,19 @@ const ringZ = RING_COURSE.map((r) => r.position.z)
 const ringCap = RING_COURSE.map((r) => r.position.y - RING_MARGIN)
 const RING_N = RING_COURSE.length
 
-/** Everything the airport, corridor and ring rules can touch lies in this box. */
+/** Everything the central corridor and ring rules can touch lies in this box. */
 const CONSTRAINT_BOX: Rect = (() => {
-  let minX = Math.min(APPROACH_CORRIDOR.minX, DEPARTURE_CORRIDOR.minX, AIRPORT_FLAT_ZONE.minX)
-  let maxX = Math.max(APPROACH_CORRIDOR.maxX, DEPARTURE_CORRIDOR.maxX, AIRPORT_FLAT_ZONE.maxX)
-  let minZ = Math.min(APPROACH_CORRIDOR.minZ, DEPARTURE_CORRIDOR.minZ, AIRPORT_FLAT_ZONE.minZ)
-  let maxZ = Math.max(APPROACH_CORRIDOR.maxZ, DEPARTURE_CORRIDOR.maxZ, AIRPORT_FLAT_ZONE.maxZ)
+  let minX = Math.min(APPROACH_CORRIDOR.minX, DEPARTURE_CORRIDOR.minX)
+  let maxX = Math.max(APPROACH_CORRIDOR.maxX, DEPARTURE_CORRIDOR.maxX)
+  let minZ = Math.min(APPROACH_CORRIDOR.minZ, DEPARTURE_CORRIDOR.minZ)
+  let maxZ = Math.max(APPROACH_CORRIDOR.maxZ, DEPARTURE_CORRIDOR.maxZ)
   for (let i = 0; i < RING_N; i++) {
     minX = Math.min(minX, ringX[i])
     maxX = Math.max(maxX, ringX[i])
     minZ = Math.min(minZ, ringZ[i])
     maxZ = Math.max(maxZ, ringZ[i])
   }
-  const m = Math.max(RING_OUTER, CORRIDOR_FADE + PAD, AIRPORT_BLEND + PAD) + 10
+  const m = Math.max(RING_OUTER, CORRIDOR_FADE + PAD) + 10
   return { minX: minX - m, maxX: maxX + m, minZ: minZ - m, maxZ: maxZ + m }
 })()
 
@@ -208,14 +197,17 @@ interface Islet {
   z: number
   radius: number
   peak: number
+  /** Inland distance, as a fraction of the radius, where the relief reaches its peak (1 = a dome). */
+  plateau: number
 }
 
 /** Small offshore islands, at fixed centres beyond the main coast. */
 export const ISLETS: readonly Islet[] = [
-  { x: -41000, z: -40000, radius: 2600, peak: 240 },
-  { x: 40000, z: 37000, radius: 3200, peak: 380 },
-  { x: -42000, z: 33000, radius: 1800, peak: 120 },
-  { x: 36000, z: -41000, radius: 2200, peak: 190 },
+  // North-west: a low tableland, big enough for Gull Island's 1600 m runway.
+  { x: -41000, z: -40000, radius: 3000, peak: 45, plateau: 0.6 },
+  { x: 40000, z: 37000, radius: 3200, peak: 380, plateau: 1 },
+  { x: -42000, z: 33000, radius: 1800, peak: 120, plateau: 1 },
+  { x: 36000, z: -41000, radius: 2200, peak: 190, plateau: 1 },
 ]
 
 // ---------------------------------------------------------------- pieces
@@ -358,49 +350,134 @@ function isletCoast(x: number, z: number): number {
     const c = s.radius * (1 + 0.3 * fbm2(x * (1 / 1500), z * (1 / 1500), 3, S_ISLE + i)) - d
     if (c > best) {
       best = c
-      const k = smoothstep(0, s.radius, c)
+      const k = smoothstep(0, s.radius * s.plateau, c)
       isletHeight = s.peak * k * k * (0.75 + 0.25 * fbm2(x * (1 / 700), z * (1 / 700), 3, S_ISLE + 50 + i))
     }
   }
   return best
 }
 
+const N_SITES = AIRPORT_SITES.length
+
+/**
+ * Coarse lookup of the airports whose constraints can touch a point: a bit
+ * mask per MASK_CELL square (bit i = AIRPORT_SITES[i]), so the ~all calls far
+ * from every airport cost one array read.
+ */
+const MASK_CELL = 2000
+const MASK_N = Math.ceil(WORLD.terrainSize / MASK_CELL) + 2
+const MASK_ORIGIN = -(MASK_N * MASK_CELL) / 2
+const INV_MASK_CELL = 1 / MASK_CELL
+const SITE_MASK = (() => {
+  if (N_SITES > 31) throw new Error('airport bit mask holds at most 31 airports')
+  const m = new Int32Array(MASK_N * MASK_N)
+  for (let k = 0; k < N_SITES; k++) {
+    const bx = AIRPORT_SITES[k].box
+    const i0 = Math.max(0, Math.floor((bx.minX - MASK_ORIGIN) * INV_MASK_CELL))
+    const i1 = Math.min(MASK_N - 1, Math.floor((bx.maxX - MASK_ORIGIN) * INV_MASK_CELL))
+    const j0 = Math.max(0, Math.floor((bx.minZ - MASK_ORIGIN) * INV_MASK_CELL))
+    const j1 = Math.min(MASK_N - 1, Math.floor((bx.maxZ - MASK_ORIGIN) * INV_MASK_CELL))
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) m[j * MASK_N + i] |= 1 << k
+  }
+  return m
+})()
+
+function sitesNear(x: number, z: number): number {
+  const i = Math.floor((x - MASK_ORIGIN) * INV_MASK_CELL)
+  const j = Math.floor((z - MASK_ORIGIN) * INV_MASK_CELL)
+  if (i < 0 || j < 0 || i >= MASK_N || j >= MASK_N) return 0
+  return SITE_MASK[j * MASK_N + i]
+}
+const APP_HALF = APPROACH_HALF_WIDTH + PAD
+const APP_END = APPROACH_LENGTH + PAD
+const FLAT_GROW = FLAT_MARGIN + PAD
+
 function applyConstraints(x: number, z: number, h: number): number {
   const b = CONSTRAINT_BOX
-  if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return h
+  if (x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ) {
+    // Central field's original approach / departure corridors: flat caps, padded by two cells.
+    let d = rectDist(x, z, APPROACH_CORRIDOR) - PAD
+    if (d < CORRIDOR_FADE && h > APPROACH_CAP) {
+      h = d <= 0 ? APPROACH_CAP : h + (APPROACH_CAP - h) * (1 - smoothstep(0, CORRIDOR_FADE, d))
+    }
+    d = rectDist(x, z, DEPARTURE_CORRIDOR) - PAD
+    if (d < CORRIDOR_FADE && h > DEPARTURE_CAP) {
+      h = d <= 0 ? DEPARTURE_CAP : h + (DEPARTURE_CAP - h) * (1 - smoothstep(0, CORRIDOR_FADE, d))
+    }
 
-  // Approach / departure corridors: cap the terrain, padded by two cells.
-  let d = rectDist(x, z, APPROACH_CORRIDOR) - PAD
-  if (d < CORRIDOR_FADE && h > APPROACH_CAP) {
-    h = d <= 0 ? APPROACH_CAP : h + (APPROACH_CAP - h) * (1 - smoothstep(0, CORRIDOR_FADE, d))
-  }
-  d = rectDist(x, z, DEPARTURE_CORRIDOR) - PAD
-  if (d < CORRIDOR_FADE && h > DEPARTURE_CAP) {
-    h = d <= 0 ? DEPARTURE_CAP : h + (DEPARTURE_CAP - h) * (1 - smoothstep(0, CORRIDOR_FADE, d))
-  }
-
-  // Ring course: keep the terrain well below every ring.
-  for (let i = 0; i < RING_N; i++) {
-    const dx = x - ringX[i]
-    const dz = z - ringZ[i]
-    const d2 = dx * dx + dz * dz
-    if (d2 < RING_OUTER * RING_OUTER && h > ringCap[i]) {
-      const w = 1 - smoothstep(RING_INNER, RING_OUTER, Math.sqrt(d2))
-      h += (ringCap[i] - h) * w
+    // Ring course: keep the terrain well below every ring.
+    for (let i = 0; i < RING_N; i++) {
+      const dx = x - ringX[i]
+      const dz = z - ringZ[i]
+      const d2 = dx * dx + dz * dz
+      if (d2 < RING_OUTER * RING_OUTER && h > ringCap[i]) {
+        const w = 1 - smoothstep(RING_INNER, RING_OUTER, Math.sqrt(d2))
+        h += (ringCap[i] - h) * w
+      }
     }
   }
 
-  // Airport plateau, exact out to two cells past the zone, then a smooth blend.
-  const da = rectDist(x, z, AIRPORT_FLAT_ZONE) - PAD
-  if (da <= 0) return ELEV
-  if (da < AIRPORT_BLEND) h = ELEV + (h - ELEV) * smoothstep(0, AIRPORT_BLEND, da)
+  const near = sitesNear(x, z)
+  if (near === 0) return h
+
+  // Approach surfaces of both runway ends of every airport: a sloped cap
+  // (elevation + 12 m + 3 % of the distance from the threshold) over a padded
+  // 1.5 km corridor out to 10 km, faded back to natural terrain.
+  for (let i = 0; i < N_SITES; i++) {
+    if ((near & (1 << i)) === 0) continue
+    const s = AIRPORT_SITES[i]
+    const bx = s.box
+    if (x < bx.minX || x > bx.maxX || z < bx.minZ || z > bx.maxZ) continue
+    const ox = x - s.cx
+    const oz = z - s.cz
+    const along = ox * s.dx + oz * s.dz
+    const out = (along < 0 ? -along : along) - s.runwayHalf
+    const cap = s.elevation + APPROACH_CARVE_BASE + APPROACH_SLOPE * (out > 0 ? out : 0)
+    if (h <= cap) continue
+    const across = oz * s.dx - ox * s.dz
+    const e = (across < 0 ? -across : across) - APP_HALF
+    const f = out - APP_END
+    if (e <= 0 && f <= 0) {
+      h = cap
+      continue
+    }
+    const ee = e > 0 ? e : 0
+    const ff = f > 0 ? f : 0
+    if (ee >= APPROACH_FADE || ff >= APPROACH_FADE) continue
+    const d = Math.sqrt(ee * ee + ff * ff)
+    if (d < APPROACH_FADE) h += (cap - h) * (1 - smoothstep(0, APPROACH_FADE, d))
+  }
+
+  // Airport plateaus, applied last: exact out to the flatZone plus margin and
+  // two grid cells, then a smooth blend to the (capped) natural terrain.
+  for (let i = 0; i < N_SITES; i++) {
+    if ((near & (1 << i)) === 0) continue
+    const s = AIRPORT_SITES[i]
+    const bx = s.flatBox
+    if (x < bx.minX || x > bx.maxX || z < bx.minZ || z > bx.maxZ) continue
+    const ox = x - s.fcx
+    const oz = z - s.fcz
+    const along = ox * s.fdx + oz * s.fdz
+    const across = oz * s.fdx - ox * s.fdz
+    const e = (along < 0 ? -along : along) - s.flatHalfL - FLAT_GROW
+    const f = (across < 0 ? -across : across) - s.flatHalfW - FLAT_GROW
+    if (e <= 0 && f <= 0) return s.elevation
+    const ee = e > 0 ? e : 0
+    const ff = f > 0 ? f : 0
+    if (ee >= s.blend || ff >= s.blend) continue
+    const d = Math.sqrt(ee * ee + ff * ff)
+    if (d < s.blend) h = s.elevation + (h - s.elevation) * smoothstep(0, s.blend, d)
+  }
   return h
 }
 
 // ---------------------------------------------------------------- height
 
-/** Natural terrain height (m) with the seabed kept negative. */
-export function naturalHeightAt(x: number, z: number): number {
+/**
+ * Terrain before the airport, corridor and ring constraints (m, seabed
+ * negative). Used to choose airport sites and to check them in tests.
+ */
+export function baseHeightAt(x: number, z: number): number {
   const cMain = mainCoast(x, z)
   const cIsle = isletCoast(x, z)
   let h: number
@@ -435,7 +512,12 @@ export function naturalHeightAt(x: number, z: number): number {
   }
 
   if (h > -2) h = carveRivers(x, z, h)
-  return applyConstraints(x, z, h)
+  return h
+}
+
+/** Natural terrain height (m) with the seabed kept negative: the physics and render ground. */
+export function naturalHeightAt(x: number, z: number): number {
+  return applyConstraints(x, z, baseHeightAt(x, z))
 }
 
 /** Forest cover 0..1 (clumped woods); shared by tree placement and the ground shader. */
@@ -450,6 +532,3 @@ export function drynessAt(x: number, z: number): number {
   return smoothstep(-0.25, 0.35, n)
 }
 
-export function isPavedAt(x: number, z: number): boolean {
-  return isPaved(x, z)
-}

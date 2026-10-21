@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { AIRPORTS } from '../../config/airports'
 import { WORLD } from '../../config/world'
+import { runwayEnds } from '../../game/airportGeometry'
 import {
   DEEP_SEA_CUTOFF,
   SKIRT_INDEX_COUNT,
@@ -80,6 +82,25 @@ describe('terrain chunks', () => {
       }
     }
     expect(tested).toBeGreaterThan(1000)
+    expect(worst).toBeLessThan(1e-3)
+  })
+
+  it('finest level equals the physics sampler on every airport plateau and threshold', () => {
+    const sampler = createTerrainSampler()
+    const rnd = lcg(5)
+    let worst = 0
+    for (const a of AIRPORTS) {
+      const points = [a.center, ...runwayEnds(a).map((e) => e.threshold)]
+      for (const p of points) {
+        const c = chunk(0, Math.floor((p.x - ROOT_MIN) / LEAF_SIZE), Math.floor((p.z - ROOT_MIN) / LEAF_SIZE))
+        expect(c.empty).toBe(false)
+        for (let n = 0; n < 30; n++) {
+          const x = c.originX + rnd() * LEAF_SIZE
+          const z = c.originZ + rnd() * LEAF_SIZE
+          worst = Math.max(worst, Math.abs(meshHeightAt(c, x, z) - sampler.rawHeightAt(x, z)))
+        }
+      }
+    }
     expect(worst).toBeLessThan(1e-3)
   })
 

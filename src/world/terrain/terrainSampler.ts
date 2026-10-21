@@ -14,7 +14,8 @@
 
 import { WORLD } from '../../config/world'
 import type { SurfaceType, TerrainSampler } from '../../simulation/types'
-import { WATER_THRESHOLD, isPavedAt, naturalHeightAt } from './heightField'
+import { isPavedAt } from './airportTerrain'
+import { WATER_THRESHOLD, naturalHeightAt } from './heightField'
 
 export const GRID_STEP = WORLD.physicsGridStep
 const INV_STEP = 1 / GRID_STEP

@@ -50,6 +50,17 @@ three 0.186.1, @react-three/fiber 9.8.2 (no drei), zustand 5.0.15, Vitest 5.0.5,
 - Quality now sets view distance, LOD bias, tree density, cloud count, shadows and fog; it never changes physics.
 - Gate: 205 tests passing; build bundles the terrain worker.
 
+## Phase 2: multiple airports (same branch)
+- 10 airports: Central Field, Harbor and North Bay Internationals, Ridgeback Air Base, Westport, Southgate,
+  Eastshore, Pine Ridge, Gull Island and Cedar Valley. The data lives in `src/config/airports.ts` and the
+  geometry in `src/game/airportGeometry.ts`.
+- Terrain flattens every airport exactly and keeps a sloped clear surface 10 km out from both runway ends.
+  Sites were moved up to 2.5 km onto suitable ground.
+- Every airport is drawn: markings, runway numbers, edge, threshold and taxi lights, PAPI, buildings by class.
+- Airport and runway picker for Free Flight, Take-off and Landing; world map (M); HUD minimap,
+  nearest-airport readout and ILS-style approach guidance.
+- Gate: 292 tests passing.
+
 ## Known limitations
 - No wind, prop torque/P-factor or asymmetric stall wing-drop; gear force is vertical.
 - No audio, gamepad or touch controls; keyboard + mouse (free-look) only.
