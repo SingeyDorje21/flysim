@@ -3,9 +3,11 @@
  * physics step and eventually produces a FlightResult. Pure TS, no React.
  */
 
-import { RUNWAY, SPAWNS, isOnRunway } from '../config/world'
+import { getAirport } from '../config/airports'
 import type { AircraftState } from '../simulation/types'
+import { getRunwayEnd, inRect, runwayAt, runwayRect, toLocal, type OrientedRect, type RunwayEnd } from './airportGeometry'
 import { getModeInfo } from './modes'
+import { HOME_PLACE, spawnFor, type FlightPlace } from './spawns'
 import type { ChallengeProgress, FlightResult, GameMode, ResultStat, RingCourseView } from './types'
 
 export interface Challenge {
@@ -135,15 +137,31 @@ class TakeoffChallenge extends BaseChallenge {
   private maxCentrelineDev = 0
   private maxBank = 0
   private agl = 0
-  private readonly startZ = SPAWNS.takeoff.position.z
+  private readonly rect: OrientedRect
+  /** Start position, measured along the runway heading. */
+  private readonly startAlong: number
+
+  constructor(place: FlightPlace) {
+    super('takeoff')
+    this.rect = runwayRect(getAirport(place.airportId))
+    const start = spawnFor('takeoff', place).position
+    this.startAlong = this.along(start.x, start.z)
+  }
+
+  /** Signed distance along the direction of the take-off. */
+  private along(x: number, z: number): number {
+    // Runway rects point along the lower-numbered end; the take-off may use the other one.
+    return toLocal(this.rect, x, z).along
+  }
 
   protected evaluate(state: AircraftState, dt: number): void {
     this.agl = state.heightAboveGround
+    const { x, z } = state.position
     if (!this.liftoff) {
       if (state.onGround) {
         this.airborneFor = 0
-        this.maxCentrelineDev = Math.max(this.maxCentrelineDev, Math.abs(state.position.x - RUNWAY.centerX))
-        if (!isOnRunway(state.position.x, state.position.z)) {
+        this.maxCentrelineDev = Math.max(this.maxCentrelineDev, Math.abs(toLocal(this.rect, x, z).across))
+        if (!inRect(this.rect, x, z)) {
           this.fail('Runway excursion', 'You left the runway before lifting off')
         }
         return
@@ -152,7 +170,7 @@ class TakeoffChallenge extends BaseChallenge {
       if (this.airborneFor >= LIFTOFF_CONFIRM) {
         this.liftoff = {
           time: this.elapsed - this.airborneFor,
-          distance: this.startZ - state.position.z,
+          distance: Math.abs(this.along(x, z) - this.startAlong),
           speed: state.airspeed,
         }
       }
@@ -202,33 +220,53 @@ class LandingChallenge extends BaseChallenge {
   private stoppedFor = 0
   private distToAim = 0
   private groundSpeed = 0
-  private readonly startDist = Math.hypot(SPAWNS.landing.position.x, SPAWNS.landing.position.z - RUNWAY.aimPointZ)
+  private readonly end: RunwayEnd
+  private readonly rect: OrientedRect
+  private readonly startDist: number
+
+  constructor(place: FlightPlace) {
+    super('landing')
+    this.end = getRunwayEnd(place.airportId, place.runwayEnd)
+    this.rect = runwayRect(this.end.airport)
+    const start = spawnFor('landing', place).position
+    this.startDist = Math.hypot(start.x - this.end.aimPoint.x, start.z - this.end.aimPoint.z)
+  }
+
+  private onTargetRunway(x: number, z: number): boolean {
+    return inRect(this.rect, x, z)
+  }
 
   protected evaluate(state: AircraftState, dt: number): void {
     const { x, z } = state.position
     this.groundSpeed = state.groundSpeed
     if (!this.touchdown) {
-      this.distToAim = Math.hypot(x - RUNWAY.centerX, z - RUNWAY.aimPointZ)
+      this.distToAim = Math.hypot(x - this.end.aimPoint.x, z - this.end.aimPoint.z)
       if (state.onGround) {
         this.touchdown = { sink: Math.max(0, -this.prevVerticalSpeed), x, z, speed: state.airspeed }
-        if (!isOnRunway(x, z)) this.fail('Missed the runway', 'You touched down off the paved runway')
+        if (!this.onTargetRunway(x, z)) {
+          const other = runwayAt(x, z)
+          if (other) this.fail('Wrong airport', `You landed at ${other.name}, not ${this.end.airport.name}`)
+          else this.fail('Missed the runway', 'You touched down off the paved runway')
+        }
       }
       this.prevVerticalSpeed = state.verticalSpeed
       return
     }
-    if (state.onGround && !isOnRunway(x, z)) {
+    if (state.onGround && !this.onTargetRunway(x, z)) {
       this.fail('Runway excursion', 'You rolled off the runway')
       return
     }
     this.stoppedFor = state.onGround && state.groundSpeed < STOPPED_SPEED ? this.stoppedFor + dt : 0
-    if (this.stoppedFor >= 0.5) this.finish(z)
+    if (this.stoppedFor >= 0.5) this.finish(x, z)
   }
 
-  private finish(stopZ: number): void {
+  private finish(stopX: number, stopZ: number): void {
     const td = this.touchdown!
-    const centreOffset = Math.abs(td.x - RUNWAY.centerX)
-    const aimError = Math.abs(td.z - RUNWAY.aimPointZ)
-    const rollout = td.z - stopZ
+    const tdLocal = toLocal(this.rect, td.x, td.z)
+    const aimLocal = toLocal(this.rect, this.end.aimPoint.x, this.end.aimPoint.z)
+    const centreOffset = Math.abs(tdLocal.across)
+    const aimError = Math.abs(tdLocal.along - aimLocal.along)
+    const rollout = Math.abs(toLocal(this.rect, stopX, stopZ).along - tdLocal.along)
     let score = 1000
     score -= Math.max(0, td.sink - 0.8) * 180
     score -= Math.max(0, centreOffset - 2) * 20
@@ -248,7 +286,7 @@ class LandingChallenge extends BaseChallenge {
   protected describe(): Description {
     if (!this.touchdown) {
       return {
-        objective: 'Land on runway 36',
+        objective: `Land on runway ${this.end.designator} at ${this.end.airport.code}`,
         detail: 'Aim for the touchdown markers past the threshold',
         fraction: 1 - this.distToAim / this.startDist,
       }
@@ -313,15 +351,18 @@ class RingChallenge extends BaseChallenge {
   }
 }
 
-/** ringView is required for 'rings' and ignored otherwise. */
-export function createChallenge(mode: GameMode, ringView?: RingCourseView): Challenge {
+/**
+ * ringView is required for 'rings' and ignored otherwise. `place` is the
+ * airport and runway end for take-off and landing (defaults to the home field).
+ */
+export function createChallenge(mode: GameMode, ringView?: RingCourseView, place: FlightPlace = HOME_PLACE): Challenge {
   switch (mode) {
     case 'freeFlight':
       return new FreeFlightChallenge(mode)
     case 'takeoff':
-      return new TakeoffChallenge(mode)
+      return new TakeoffChallenge(place)
     case 'landing':
-      return new LandingChallenge(mode)
+      return new LandingChallenge(place)
     case 'rings':
       if (!ringView) throw new Error('Ring course needs a ring view')
       return new RingChallenge(ringView)

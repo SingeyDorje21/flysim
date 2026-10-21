@@ -42,12 +42,15 @@ export function FlightCanvas() {
   }, [audio, masterVolume])
   useEffect(() => () => audio.dispose(), [audio])
 
+  const airportId = useGameStore((s) => s.airportId)
+  const runwayEnd = useGameStore((s) => s.runwayEnd)
+
   // Start and every restart: back to the spawn, no stale state.
   useEffect(() => {
-    session.reset(mode)
+    session.reset(mode, { airportId, runwayEnd })
     // A focused menu button would otherwise eat Space (brakes).
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
-  }, [session, mode, flightId])
+  }, [session, mode, flightId, airportId, runwayEnd])
 
   useEffect(() => {
     session.keyboard.invertPitch = invertPitch

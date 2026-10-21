@@ -4,8 +4,9 @@
  * Owned by the orchestrator.
  */
 
-import { SPAWNS } from '../config/world'
+import { approachGuidance, nearestAirport } from '../game/airportGeometry'
 import { createChallenge, type Challenge } from '../game/challenges'
+import { HOME_PLACE, spawnFor, type FlightPlace } from '../game/spawns'
 import { RING_COURSE } from '../game/courses'
 import type { FlightResult, GameMode, RingCourseView } from '../game/types'
 import { KeyboardControls } from '../input/keyboard'
@@ -13,7 +14,7 @@ import { AircraftPhysics } from '../simulation/AircraftPhysics'
 import { FixedTimestep } from '../simulation/FixedTimestep'
 import { interpolatePose } from '../simulation/interpolate'
 import type { AircraftRenderState, FlightModel, TerrainSampler } from '../simulation/types'
-import { publishTelemetry, resetTelemetry } from '../state/telemetry'
+import { publishTelemetry, resetTelemetry, type NavInfo } from '../state/telemetry'
 import { getTerrainSampler } from '../world/terrain/terrainSampler'
 
 const TELEMETRY_INTERVAL = 1 / 30
@@ -25,6 +26,8 @@ export interface FlightSessionOptions {
   mode: GameMode
   /** Ground the physics collides with; defaults to the mesh at default quality. */
   terrain?: TerrainSampler
+  /** Airport and runway end for the start (and the landing target). Defaults to the home field. */
+  place?: FlightPlace
   onFinish(result: FlightResult): void
 }
 
@@ -47,6 +50,7 @@ export class FlightSession {
   private readonly timestep: FixedTimestep
   private readonly onFinish: (result: FlightResult) => void
   private mode: GameMode
+  private place: FlightPlace
   private challenge: Challenge
   private telemetryClock = 0
   private resultDelay: number | null = null
@@ -55,10 +59,11 @@ export class FlightSession {
   constructor(options: FlightSessionOptions) {
     this.terrainTarget = options.terrain ?? getTerrainSampler()
     this.mode = options.mode
+    this.place = options.place ?? HOME_PLACE
     this.onFinish = options.onFinish
-    this.physics = new AircraftPhysics({ terrain: this.terrain, spawn: SPAWNS[this.mode] })
+    this.physics = new AircraftPhysics({ terrain: this.terrain, spawn: spawnFor(this.mode, this.place) })
     this.timestep = new FixedTimestep({ dt: this.physics.fixedDt })
-    this.challenge = createChallenge(this.mode, this.ringView)
+    this.challenge = createChallenge(this.mode, this.ringView, this.place)
     const s = this.physics.state
     this.renderState = {
       position: { ...s.position },
@@ -84,12 +89,13 @@ export class FlightSession {
     this.terrainTarget = terrain
   }
 
-  /** Back to the spawn of `mode` with no leftover state. */
-  reset(mode: GameMode = this.mode): void {
+  /** Back to the spawn of `mode` at `place` with no leftover state. */
+  reset(mode: GameMode = this.mode, place: FlightPlace = this.place): void {
     this.mode = mode
-    this.physics.reset(SPAWNS[mode])
+    this.place = place
+    this.physics.reset(spawnFor(mode, place))
     this.timestep.reset()
-    this.challenge = createChallenge(mode, this.ringView)
+    this.challenge = createChallenge(mode, this.ringView, place)
     this.syncKeyboard()
     this.telemetryClock = 0
     this.resultDelay = null
@@ -188,6 +194,29 @@ export class FlightSession {
       simTime: s.simTime,
       position: { ...s.position },
       challenge: this.challenge.progress,
+      nav: this.navInfo(),
     })
+  }
+
+  private navInfo(): NavInfo {
+    const s = this.physics.state
+    const { x, y, z } = s.position
+    const near = nearestAirport(x, z)
+    const app = s.onGround ? null : approachGuidance(x, y, z, s.headingDeg)
+    return {
+      nearest: {
+        code: near.airport.code,
+        name: near.airport.name,
+        distance: near.distance,
+        bearingDeg: near.bearingDeg,
+      },
+      approach: app && {
+        code: app.end.airport.code,
+        runway: app.end.designator,
+        distance: app.distance,
+        lateral: app.lateral,
+        vertical: app.vertical,
+      },
+    }
   }
 }
