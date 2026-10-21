@@ -7,9 +7,10 @@ import { getAircraft, type AircraftId } from '../config/aircraftCatalog'
 import { getAirport } from '../config/airports'
 import type { AircraftState } from '../simulation/types'
 import { getRunwayEnd, inRect, runwayAt, runwayRect, toLocal, type OrientedRect, type RunwayEnd } from './airportGeometry'
+import { LessonChallenge } from './lessons'
 import { getModeInfo } from './modes'
 import { HOME_PLACE, spawnFor, type FlightPlace } from './spawns'
-import type { ChallengeProgress, FlightResult, GameMode, ResultStat, RingCourseView } from './types'
+import type { ChallengeProgress, FlightResult, GameMode, LessonView, ResultStat, RingCourseView } from './types'
 
 export interface Challenge {
   readonly mode: GameMode
@@ -18,6 +19,8 @@ export interface Challenge {
   readonly progress: ChallengeProgress
   /** Set once the flight is decided. */
   readonly result: FlightResult | null
+  /** Flight School coach state; only lessons have one. */
+  readonly lessonView?: LessonView
 }
 
 export const TAKEOFF_TARGET_AGL = 150
@@ -374,6 +377,9 @@ export function createChallenge(
       return new TakeoffChallenge(place, aircraftId)
     case 'landing':
       return new LandingChallenge(place, aircraftId)
+    case 'lessonTakeoff':
+    case 'lessonLanding':
+      return new LessonChallenge(mode, aircraftId)
     case 'rings':
       if (!ringView) throw new Error('Ring course needs a ring view')
       return new RingChallenge(ringView)

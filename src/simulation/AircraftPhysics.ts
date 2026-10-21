@@ -111,6 +111,20 @@ const NZ_INTEGRAL_MAX = 2
 const NZ_INTEGRAL_WINDOW = 1
 /** After a stick release the holds keep re-latching while the rate transient lasts (s, rad/s). */
 const RELEASE_LATCH_TIME = 3
+/** Fly-by-wire flare mode arms below this wheel height (m, ~50 ft) when descending with the gear down. */
+const FLARE_MODE_HEIGHT = 15
+/** Steepest path neutral stick holds in flare mode: a gentle descent (-1.5 deg, ~1.7 m/s at 65 m/s). */
+const FLARE_MODE_PATH = -1.5 * (Math.PI / 180)
+/**
+ * Derotation law (as on Airbus jets): after a landing touchdown on the main
+ * wheels the pitch law stays active until the nose wheel is down and lowers
+ * the nose at this rate with the stick neutral (rad/s, 2.5 deg/s). Back stick
+ * slows it (full back holds the attitude), forward stick doubles it.
+ */
+const DEROTATION_RATE = 2.5 * (Math.PI / 180)
+/** Stick load-factor limits with the gear down (g). */
+const GEAR_DOWN_NZ_MAX = 2
+const GEAR_DOWN_NZ_MIN = 0
 const G_SETTLE = 0.08
 const ROLL_SETTLE_RATE = 0.03
 /** AoA lead gain as a fraction of the pitch bandwidth. */
@@ -222,6 +236,18 @@ export class AircraftPhysics implements FlightModel {
   private abFrac = 0
   /** FBW law blend: 0 = direct ground law, 1 = flight law. */
   private fbwBlend = 0
+  /** FBW flare mode (see FLARE_MODE_HEIGHT). */
+  private flareArmed = false
+  /**
+   * Set by flare mode on a landing; while the main wheels are down and the
+   * nose wheel is not, the derotation law flies the pitch. Cleared when the
+   * nose wheel touches or on a go-around (never set on a take-off).
+   */
+  private derotationArmed = false
+  /** Pitch attitude flare mode holds as a ceiling with the stick neutral (rad). */
+  private flareThetaRef = 0
+  /** Pitching moment of the landing gear on the last step (body, N m, + nose up). */
+  private gearPitchMoment = 0
   /** Flight-path angle held with the stick neutral (rad). */
   private gammaRef = 0
   /** Bank angle held with the stick neutral (rad). */
@@ -405,6 +431,10 @@ export class AircraftPhysics implements FlightModel {
     this.abTimer = abOn && ab ? ab.lightUpDelay : 0
     this.abFrac = abOn ? 1 : 0
     this.fbwBlend = spawn.onGround ? 0 : 1
+    this.flareArmed = false
+    this.derotationArmed = false
+    this.flareThetaRef = 0
+    this.gearPitchMoment = 0
     this.gammaRef = gamma
     this.bankRef = 0
     this.nzInt = 0
@@ -660,9 +690,27 @@ export class AircraftPhysics implements FlightModel {
     const tv = cfg.thrustVector
     const sur = s.surfaces
 
-    this.fbwBlend = weightOnWheels
-      ? moveTowards(this.fbwBlend, 0, dt / FBW_GROUND_BLEND_TIME)
-      : moveTowards(this.fbwBlend, 1, dt / f.flightBlendTime)
+    // Flare mode arms when descending through FLARE_MODE_HEIGHT with the gear down (never on
+    // a take-off, which climbs through it) and disarms on the ground or well above it.
+    if (weightOnWheels || s.heightAboveGround > FLARE_MODE_HEIGHT + 5) this.flareArmed = false
+    else if (s.heightAboveGround < FLARE_MODE_HEIGHT && s.verticalSpeed < -0.5 && s.gearPosition > 0.9) this.flareArmed = true
+    // Derotation: a landing (flare mode was armed) on the main wheels with the nose wheel
+    // still in the air. A bounce keeps it armed; the nose wheel or a go-around clears it.
+    let mainsDown = false
+    let noseDown = false
+    for (let i = 0; i < this.gear.length; i++) {
+      if (!this.gearContact[i]) continue
+      if (this.gear[i].main) mainsDown = true
+      else noseDown = true
+    }
+    if (this.flareArmed) this.derotationArmed = true
+    if (noseDown || s.heightAboveGround > FLARE_MODE_HEIGHT + 5) this.derotationArmed = false
+    const derotating = this.derotationArmed && mainsDown
+    // The ground (direct) law takes over once the nose wheel is down after a landing.
+    this.fbwBlend =
+      weightOnWheels && !derotating
+        ? moveTowards(this.fbwBlend, 0, dt / FBW_GROUND_BLEND_TIME)
+        : moveTowards(this.fbwBlend, 1, dt / f.flightBlendTime)
     const blend = this.fbwBlend
     const inFlightLaw = blend >= 1
 
@@ -710,18 +758,27 @@ export class AircraftPhysics implements FlightModel {
       // Load-factor demand: from the stick, or (neutral) from the flight-path hold.
       const n0 = cosGamma / cosPhiC
       const stickActive = !inFlightLaw || Math.abs(c.pitch) > FBW_DEADBAND
+      // Landing configuration (gear down): the stick asks for at most +2 g / 0 g, like the
+      // flaps-out limits of Airbus normal law and the gear-down gains of fighter flight controls.
+      const gearDownCfg = s.gearPosition > 0.5
+      const nzMax = gearDownCfg ? Math.min(f.nzMax, GEAR_DOWN_NZ_MAX) : f.nzMax
+      const nzMin = gearDownCfg ? Math.max(f.nzMin, GEAR_DOWN_NZ_MIN) : f.nzMin
       let nCmd: number
       if (stickActive) {
         this.gammaRef = gamma
         this.pitchNeutralTime = 0
         const sp = c.pitch
-        nCmd = sp > 0 ? n0 + sp * Math.max(0, f.nzMax - n0) : n0 + sp * Math.max(0, n0 - f.nzMin)
+        nCmd = sp > 0 ? n0 + sp * Math.max(0, nzMax - n0) : n0 + sp * Math.max(0, n0 - nzMin)
       } else {
         this.nzInt = 0
         // Just after release the path keeps moving while the g transient decays: hold the
         // path where that transient ends, not where the stick crossed neutral.
         if (this.pitchNeutralTime < RELEASE_LATCH_TIME && Math.abs(s.gForce - n0) > G_SETTLE) this.gammaRef = gamma
         this.pitchNeutralTime = Math.min(this.pitchNeutralTime + dt, RELEASE_LATCH_TIME)
+        // Flare mode (as on Airbus jets): close to the runway on a landing, neutral stick
+        // never holds a level or climbing path, only a gentle descent, so a released
+        // flare settles onto the runway instead of floating up and stalling.
+        if (this.flareArmed) this.gammaRef = Math.min(this.gammaRef, FLARE_MODE_PATH)
         nCmd = n0 + (f.pathHoldGain * (this.gammaRef - gamma) * Math.max(0, Math.cos(phi))) / gv
       }
       const ff = gv * (nCmd - n0)
@@ -742,9 +799,14 @@ export class AircraftPhysics implements FlightModel {
         const aNeed = clamp(clNeed / a.clAlpha, a.alphaCritNegDeg * DEG2RAD, critDeg * DEG2RAD)
         qCmd += ALPHA_LEAD_FACTOR * f.pitchBandwidth * (aNeed - alpha)
       }
+      // Flare mode also memorizes the attitude (as Airbus flare law does): with the stick
+      // neutral the nose never rises above where the pilot left it, so the aircraft does not
+      // hang nose-high as the speed bleeds off at idle but settles onto the runway.
+      if (!this.flareArmed || stickActive) this.flareThetaRef = theta
+      else qCmd = Math.min(qCmd, PITCH_LIMIT_GAIN * (this.flareThetaRef - theta))
       // Load-factor limiter on the measured g (integral action on the error).
-      qCmd = Math.min(qCmd, Q + NZ_LIMIT_GAIN * gv * (f.nzMax - s.gForce))
-      qCmd = Math.max(qCmd, Q + NZ_LIMIT_GAIN * gv * (f.nzMin - s.gForce))
+      qCmd = Math.min(qCmd, Q + NZ_LIMIT_GAIN * gv * (nzMax - s.gForce))
+      qCmd = Math.max(qCmd, Q + NZ_LIMIT_GAIN * gv * (nzMin - s.gForce))
       // Pitch attitude limits.
       if (f.pitchLimitUpDeg !== null) qCmd = Math.min(qCmd, PITCH_LIMIT_GAIN * (f.pitchLimitUpDeg * DEG2RAD - theta))
       if (f.pitchLimitDownDeg !== null) qCmd = Math.max(qCmd, PITCH_LIMIT_GAIN * (f.pitchLimitDownDeg * DEG2RAD - theta))
@@ -764,13 +826,20 @@ export class AircraftPhysics implements FlightModel {
       const aMax = (critDeg - f.alphaMaxMarginDeg) * DEG2RAD
       const aTarget = aProt + Math.max(0, c.pitch) * (aMax - aProt)
       qCmd = Math.min(qCmd, qTurn + f.alphaGain * (aTarget - alpha))
+      if (derotating) {
+        // Derotation law: neutral stick lowers the nose at DEROTATION_RATE, back stick slows
+        // it (full back holds the attitude), forward stick speeds it up. The main-gear
+        // moment is part of the inversion below, so the rate holds while the wheels load up.
+        qCmd = -DEROTATION_RATE * (1 - clamp(c.pitch, -1, 1))
+        this.gammaRef = gamma
+      }
 
       // Dynamic inversion: pitch moment needed for the commanded pitch acceleration.
       const flapS = flapShape(this.adFlapFrac)
       const cmOther =
         a.cm0 + a.cmAlpha * Math.sin(alpha) + a.cmQ * ((Q * cbar) / (2 * Vn)) + a.flapCm * flapS + a.groundEffectCm * this.adGroundEffect
       const gxx = w.y * I.z * w.z - w.z * I.y * w.y
-      const mReq = I.x * f.pitchBandwidth * (qCmd - Q) + gxx - qS * cbar * cmOther
+      const mReq = I.x * f.pitchBandwidth * (qCmd - Q) + gxx - qS * cbar * cmOther - (derotating ? this.gearPitchMoment : 0)
       const mElev = qS * cbar * a.cmElevator * sf.elevatorMax
       const thrust = Math.max(0, s.engine.thrust)
       const mTv = tv ? thrust * tv.arm * Math.sin(tv.maxAngle) : 0
@@ -1031,6 +1100,7 @@ export class AircraftPhysics implements FlightModel {
     if (this.nearGround && s.gearPosition >= 1) this.computeGearForces(detectTouchdown)
     else {
       for (let i = 0; i < this.gearContact.length; i++) this.gearContact[i] = false
+      this.gearPitchMoment = 0
     }
 
     // gForce: specific force along body +Y.
@@ -1082,7 +1152,11 @@ export class AircraftPhysics implements FlightModel {
       const vcy = s.velocity.y + vRot.y
       const vcz = s.velocity.z + vRot.z
 
-      if (detectTouchdown && !this.gearContact[i] && -vcy > cfg.crash.hardLandingSinkRate) {
+      // The landing limit is about the main wheels; the nose wheel (the one non-main leg,
+      // index 2: the order is left main, right main, nose) is built for derotation loads,
+      // so it gets twice the tolerance.
+      const sinkLimit = cfg.crash.hardLandingSinkRate * (gd.main ? 1 : 2)
+      if (detectTouchdown && !this.gearContact[i] && -vcy > sinkLimit) {
         this.flagHardLanding = true
       }
       this.gearContact[i] = true
@@ -1131,6 +1205,7 @@ export class AircraftPhysics implements FlightModel {
     }
 
     const tb = rotateVecInverse(q, TW, this.tmpA)
+    this.gearPitchMoment = tb.x
     this.torque.x += tb.x
     this.torque.y += tb.y
     this.torque.z += tb.z

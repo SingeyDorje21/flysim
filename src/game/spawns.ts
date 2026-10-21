@@ -9,6 +9,7 @@ import { HOME_AIRPORT_ID } from '../config/airports'
 import { SPAWNS } from '../config/world'
 import type { SpawnState } from '../simulation/types'
 import { GLIDE_SLOPE_DEG, getRunwayEnd, headingVector } from './airportGeometry'
+import { techniqueFor } from './technique'
 import type { GameMode } from './types'
 
 export interface FlightPlace {
@@ -25,6 +26,9 @@ const LINEUP_OFFSET = 60
 const FINAL_DISTANCE = 3200
 
 export function spawnFor(mode: GameMode, place: FlightPlace, aircraftId: AircraftId = 'trainer'): SpawnState {
+  // Lessons fly the matching exercise at the aircraft's own lesson airport.
+  if (mode === 'lessonTakeoff') return spawnFor('takeoff', techniqueFor(aircraftId).lessonPlace, aircraftId)
+  if (mode === 'lessonLanding') return spawnFor('landing', techniqueFor(aircraftId).lessonPlace, aircraftId)
   const ac = getAircraft(aircraftId)
   const jet = ac.engineKind !== 'piston'
   if (mode === 'rings') {

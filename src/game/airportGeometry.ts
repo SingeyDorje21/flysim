@@ -187,6 +187,18 @@ export interface ApproachGuidance {
   vertical: number
 }
 
+/** Guidance to one specific runway end (no alignment checks). */
+export function guidanceTo(end: RunwayEnd, x: number, y: number, z: number): ApproachGuidance {
+  const d = headingVector(end.headingDeg)
+  const dx = x - end.threshold.x
+  const dz = z - end.threshold.z
+  const distance = -(dx * d.x + dz * d.z)
+  const lateral = dx * -d.z + dz * d.x
+  const toAim = distance + Math.hypot(end.aimPoint.x - end.threshold.x, end.aimPoint.z - end.threshold.z)
+  const vertical = y - end.airport.elevation - Math.max(0, toAim) * Math.tan(GLIDE_SLOPE_DEG * DEG)
+  return { end, distance, lateral, vertical }
+}
+
 /**
  * The runway end the aircraft is most plausibly approaching: in front of it,
  * within range and roughly aligned. Null when there is none.

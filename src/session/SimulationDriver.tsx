@@ -1,19 +1,23 @@
 import { useFrame } from '@react-three/fiber'
+import { useState } from 'react'
+import { CalloutDetector, speak } from '../audio/callouts'
 import type { FlightAudio } from '../audio/FlightAudio'
 import { getAircraft } from '../config/aircraftCatalog'
 import { useGameStore } from '../state/gameStore'
 import type { FlightSession } from './FlightSession'
 
 /**
- * Advances the session once per rendered frame and feeds the sound engine.
- * Negative priority so the render state is updated before any world useFrame
- * callback (priority 0) reads it; a positive priority would disable R3F's
- * automatic rendering.
+ * Advances the session once per rendered frame and feeds the sound engine and
+ * the spoken callouts. Negative priority so the render state is updated
+ * before any world useFrame callback (priority 0) reads it; a positive
+ * priority would disable R3F's automatic rendering.
  */
 export function SimulationDriver({ session, audio }: { session: FlightSession; audio: FlightAudio }) {
-  const engineKind = getAircraft(session.aircraftId).engineKind
+  const info = getAircraft(session.aircraftId)
+  const engineKind = info.engineKind
+  const [callouts] = useState(() => new CalloutDetector())
   useFrame((_, delta) => {
-    const { paused, screen, overlay } = useGameStore.getState()
+    const { paused, screen, overlay, settings } = useGameStore.getState()
     const frozen = paused || overlay !== 'none' || screen !== 'flight'
     session.frame(delta, frozen)
 
@@ -37,9 +41,26 @@ export function SimulationDriver({ session, audio }: { session: FlightSession; a
         ringsPassed: session.ringView.nextIndex,
         teleportId: session.renderState.teleportId,
         frozen,
+        lessonStep: session.lessonStep,
       },
       delta,
     )
+
+    if (frozen || s.crashed) return
+    const calls = callouts.detect(
+      {
+        airspeed: s.airspeed,
+        rotateSpeed: info.speeds.rotate,
+        onGround: s.onGround,
+        verticalSpeed: s.verticalSpeed,
+        heightAboveGround: s.heightAboveGround,
+        throttle: s.controls.throttle,
+        jet: engineKind !== 'piston',
+        teleportId: session.renderState.teleportId,
+      },
+      delta,
+    )
+    if (settings.voiceCallouts) for (const text of calls) speak(text, settings.masterVolume)
   }, -1)
   return null
 }

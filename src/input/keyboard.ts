@@ -95,6 +95,11 @@ export class KeyboardControls {
     this.gear = accepted > 0.5 ? 1 : 0
   }
 
+  /** Move the throttle lever (autothrust drives it in the landing lesson). */
+  setThrottle(value: number): void {
+    this.throttle = clamp(value, 0, 1)
+  }
+
   isHeld(code: string): boolean {
     return this.pressed.has(code)
   }

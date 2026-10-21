@@ -62,6 +62,11 @@ export function FlightCanvas() {
     session.keyboard.invertPitch = invertPitch
   }, [session, invertPitch])
 
+  const assists = useGameStore((s) => s.settings.assists)
+  useEffect(() => {
+    session.setAssists(assists)
+  }, [session, assists])
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || !KeyboardControls.isFlightKey(e.code)) return

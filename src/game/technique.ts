@@ -40,6 +40,17 @@ export interface Technique {
   lessonPlace: FlightPlace
   /** One-line handling notes for the Flight School card. */
   notes: string[]
+  /** Tail strike point relative to the main wheels: height above them and distance behind (m). */
+  tailAboveMain: number
+  tailBehindMain: number
+}
+
+/**
+ * Highest safe pitch (deg) with the main wheels `height` metres above the
+ * ground: the tail clears more as the aircraft climbs. 2 degrees of margin.
+ */
+export function safePitchAtHeight(t: Technique, height: number): number {
+  return Math.atan2(t.tailAboveMain + Math.max(0, height), t.tailBehindMain) * DEG - 2
 }
 
 /** Nose-up rotation about the main wheels at which the tail strike point touches. */
@@ -58,7 +69,11 @@ const LESSON_AIRPORT: Record<AircraftId, string> = {
   global8000: 'southgate',
 }
 
-const CLIMB_PITCH: Record<AircraftId, number> = { trainer: 8, f22: 15, a220: 12, a350: 12, global8000: 12 }
+/** Initial climb pitch; the heavy A350 climbs flatter so it can accelerate to clean up the flaps. */
+const CLIMB_PITCH: Record<AircraftId, number> = { trainer: 8, f22: 15, a220: 12, a350: 10, global8000: 12 }
+
+/** Flaps come up above this multiple of the rotation speed. */
+export const FLAPS_UP_FACTOR = 1.12
 const FLARE_PITCH: Record<AircraftId, number> = { trainer: 5, f22: 9, a220: 4, a350: 4, global8000: 4 }
 
 const NOTES: Record<AircraftId, string[]> = {
@@ -99,5 +114,7 @@ export function techniqueFor(id: AircraftId): Technique {
     reverse: jet && id !== 'f22',
     lessonPlace: { airportId: airport.id, runwayEnd: runwayEnds(airport)[0].designator },
     notes: NOTES[id],
+    tailAboveMain: ac.geometry.strikePoints.tail.y - ac.geometry.gear.mainLeft.y,
+    tailBehindMain: ac.geometry.strikePoints.tail.z - ac.geometry.gear.mainLeft.z,
   }
 }
