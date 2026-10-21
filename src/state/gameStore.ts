@@ -12,7 +12,7 @@ import { CAMERA_MODES, type CameraMode, type FlightResult, type GameMode } from 
 
 export type Screen = 'mainMenu' | 'modeSelect' | 'flight' | 'results'
 /** Modal panels that can sit on top of any screen. */
-export type Overlay = 'none' | 'settings' | 'controls'
+export type Overlay = 'none' | 'settings' | 'controls' | 'howItWorks'
 /** imperial = knots, feet, ft/min. metric = km/h, metres, m/s. */
 export type Units = 'imperial' | 'metric'
 
@@ -28,6 +28,8 @@ export interface Settings {
   defaultCamera: CameraMode
   /** Free-look mouse sensitivity multiplier, 0.2..3. */
   mouseSensitivity: number
+  /** Sound effects volume 0..1 (0 = muted). */
+  masterVolume: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showInstruments: true,
   defaultCamera: 'chase',
   mouseSensitivity: 1,
+  masterVolume: 0.6,
 }
 
 export interface GameState {
@@ -125,6 +128,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (!raw || typeof raw !== 'object') return d
   const r = raw as Record<string, unknown>
   const sens = r.mouseSensitivity
+  const vol = r.masterVolume
   return {
     quality: oneOf(r.quality, QUALITY_LEVELS, d.quality),
     units: oneOf(r.units, UNITS, d.units),
@@ -134,6 +138,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     defaultCamera: oneOf(r.defaultCamera, CAMERA_MODES, d.defaultCamera),
     mouseSensitivity:
       typeof sens === 'number' && Number.isFinite(sens) ? Math.min(3, Math.max(0.2, sens)) : d.mouseSensitivity,
+    masterVolume: typeof vol === 'number' && Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : d.masterVolume,
   }
 }
 

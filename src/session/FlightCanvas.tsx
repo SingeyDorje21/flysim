@@ -1,5 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { useEffect, useState } from 'react'
+import { FlightAudio } from '../audio/FlightAudio'
 import { QUALITY_PROFILES } from '../config/quality'
 import { KeyboardControls } from '../input/keyboard'
 import { useGameStore } from '../state/gameStore'
@@ -32,6 +33,13 @@ export function FlightCanvas() {
   useEffect(() => {
     session.setTerrain(terrain)
   }, [session, terrain])
+
+  const masterVolume = useGameStore((s) => s.settings.masterVolume)
+  const [audio] = useState(() => new FlightAudio())
+  useEffect(() => {
+    audio.setVolume(masterVolume)
+  }, [audio, masterVolume])
+  useEffect(() => () => audio.dispose(), [audio])
 
   // Start and every restart: back to the spawn, no stale state.
   useEffect(() => {
@@ -82,7 +90,7 @@ export function FlightCanvas() {
         gl={{ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' }}
         camera={{ fov: 65, near: 0.2, far: 60000 }}
       >
-        <SimulationDriver session={session} />
+        <SimulationDriver session={session} audio={audio} />
         <FlightWorld
           renderState={session.renderState}
           terrain={terrain}

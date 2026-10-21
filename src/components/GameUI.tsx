@@ -3,7 +3,9 @@ import { QUALITY_LEVELS } from '../config/quality'
 import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES } from '../game/types'
 import { useGameStore, type Units } from '../state/gameStore'
+import { ALL_BINDINGS } from './controlsData'
 import { formatStat, formatTime } from './format'
+import { HowItWorks } from './HowItWorks'
 import { Hud } from './Hud'
 import { InstrumentPanel } from './Instruments'
 import './GameUI.css'
@@ -25,6 +27,9 @@ function MainMenu() {
           </button>
           <button type="button" className="btn" onClick={() => startFlight('freeFlight')}>
             Quick Flight
+          </button>
+          <button type="button" className="btn" onClick={() => openOverlay('howItWorks')}>
+            How It Works
           </button>
           <button type="button" className="btn" onClick={() => openOverlay('settings')}>
             Settings
@@ -110,6 +115,9 @@ function PauseMenu() {
           </button>
           <button type="button" className="btn" onClick={() => openOverlay('controls')}>
             Controls
+          </button>
+          <button type="button" className="btn" onClick={() => openOverlay('howItWorks')}>
+            How It Works
           </button>
           <button type="button" className="btn danger" onClick={quitToMenu}>
             Main Menu
@@ -292,6 +300,20 @@ function SettingsPanel() {
             onChange={(e) => updateSettings({ mouseSensitivity: Number(e.target.value) })}
           />
         </div>
+        <div className="field">
+          <label className="field-label" htmlFor={`${uid}-vol`}>
+            Sound volume: {settings.masterVolume === 0 ? 'muted' : `${Math.round(settings.masterVolume * 100)}%`}
+          </label>
+          <input
+            id={`${uid}-vol`}
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={settings.masterVolume}
+            onChange={(e) => updateSettings({ masterVolume: Number(e.target.value) })}
+          />
+        </div>
         <div className="menu-buttons row">
           <button type="button" className="btn" onClick={resetSettings}>
             Reset to defaults
@@ -329,19 +351,6 @@ function SettingsPanel() {
   )
 }
 
-const CONTROLS: readonly (readonly [string, string])[] = [
-  ['Pitch (nose down / up)', 'W / S or Up / Down (invertible)'],
-  ['Roll', 'A / D or Left / Right'],
-  ['Rudder', 'Q / E'],
-  ['Throttle up / down', 'R / F, PageUp / PageDown, = / -'],
-  ['Flaps extend / retract', '] or X / [ or Z'],
-  ['Brakes (hold)', 'B or Space'],
-  ['Elevator trim nose up / down', '. / ,'],
-  ['Camera cycle / direct', 'C / 1, 2, 3'],
-  ['Pause', 'Esc or P'],
-  ['Toggle HUD / instruments', 'H / I'],
-]
-
 function ControlsPanel() {
   const closeOverlay = useGameStore((s) => s.closeOverlay)
   return (
@@ -356,7 +365,7 @@ function ControlsPanel() {
             </tr>
           </thead>
           <tbody>
-            {CONTROLS.map(([action, keys]) => (
+            {ALL_BINDINGS.map(({ action, keys }) => (
               <tr key={action}>
                 <th scope="row">{action}</th>
                 <td>{keys}</td>
@@ -397,6 +406,7 @@ export function GameUI() {
       {screen === 'results' && <Results />}
       {overlay === 'settings' && <SettingsPanel />}
       {overlay === 'controls' && <ControlsPanel />}
+      {overlay === 'howItWorks' && <HowItWorks />}
     </div>
   )
 }

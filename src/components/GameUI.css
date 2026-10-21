@@ -124,3 +124,22 @@ input[type='range'] { width: 100%; }
 .controls-table th[scope='row'] { font-weight: 500; color: var(--text-dim); }
 .controls-table td { font-family: var(--font-mono); }
 .note { color: var(--text-dim); font-size: 0.85rem; }
+
+.guide-panel { width: min(760px, 100%); max-height: 88vh; line-height: 1.5; }
+.guide-section { margin-top: 18px; }
+.guide-section h3 { margin: 0 0 6px; font-size: 1.05rem; color: var(--accent); }
+.guide-section ul, .guide-section ol { margin: 0; padding-left: 20px; }
+.guide-section li { margin: 4px 0; }
+.guide-section p { margin: 0; }
+.guide-section .controls-table { margin-bottom: 10px; }
+.controls-table caption { text-align: left; font-weight: 600; padding: 6px 0; }
+kbd {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid var(--panel-border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: rgba(255, 255, 255, 0.06);
+}

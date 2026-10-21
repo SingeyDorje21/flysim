@@ -1,6 +1,7 @@
 import { CAMERA_MODES, type CameraMode } from '../game/types'
 import { useGameStore } from '../state/gameStore'
 import { useTelemetry } from '../state/telemetry'
+import { HUD_COMMANDS } from './controlsData'
 import { formatAltitude, formatSpeed, formatTime, formatVerticalSpeed } from './format'
 import './Hud.css'
 
@@ -177,9 +178,16 @@ export function Hud() {
         </div>
       </div>
 
-      <div className="hud-hint">
-        Esc pause &middot; C camera &middot; H HUD &middot; I instruments
-      </div>
+      <dl className="hud-commands" aria-label="Key commands">
+        {HUD_COMMANDS.map(([keys, action]) => (
+          <div className="hud-command" key={action}>
+            <dt>
+              <kbd>{keys}</kbd>
+            </dt>
+            <dd>{action}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }
