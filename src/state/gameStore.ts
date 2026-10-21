@@ -7,6 +7,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { QUALITY_LEVELS, type Quality } from '../config/quality'
+import { AIRCRAFT_IDS, type AircraftId } from '../config/aircraftCatalog'
 import { HOME_AIRPORT_ID, getAirport } from '../config/airports'
 import { runwayEnds } from '../game/airportGeometry'
 import { GAME_MODES } from '../game/modes'
@@ -66,6 +67,10 @@ export interface GameState {
   airportId: string
   /** Runway end designator at that airport, e.g. "36" or "09". */
   runwayEnd: string
+  /** Aircraft to fly (persisted). */
+  aircraftId: AircraftId
+
+  selectAircraft(aircraftId: AircraftId): void
 
   /** Choose the airport (and optionally the runway end; defaults to its lower-numbered end). */
   selectAirport(airportId: string, runwayEnd?: string): void
@@ -122,7 +127,7 @@ const safeStorage: StateStorage = {
   },
 }
 
-type PersistedSlice = Pick<GameState, 'settings' | 'bestScores'>
+type PersistedSlice = Pick<GameState, 'settings' | 'bestScores' | 'aircraftId'>
 
 const UNITS: readonly Units[] = ['imperial', 'metric']
 
@@ -181,6 +186,9 @@ export const useGameStore = create<GameState>()(
       settings: DEFAULT_SETTINGS,
       airportId: HOME_AIRPORT_ID,
       runwayEnd: runwayEnds(getAirport(HOME_AIRPORT_ID))[0].designator,
+
+      aircraftId: 'trainer',
+      selectAircraft: (aircraftId) => set({ aircraftId }),
 
       selectAirport: (airportId, runwayEnd) => {
         const ends = runwayEnds(getAirport(airportId))
@@ -256,7 +264,7 @@ export const useGameStore = create<GameState>()(
     {
       name: 'flysim-v1',
       storage: createJSONStorage(() => safeStorage),
-      partialize: (s): PersistedSlice => ({ settings: s.settings, bestScores: s.bestScores }),
+      partialize: (s): PersistedSlice => ({ settings: s.settings, bestScores: s.bestScores, aircraftId: s.aircraftId }),
       // Validate field by field: settings added later get their defaults and
       // corrupt values never reach the renderer.
       merge: (persisted, current) => {
@@ -265,6 +273,7 @@ export const useGameStore = create<GameState>()(
         return {
           ...current,
           bestScores: sanitizeBestScores(p.bestScores),
+          aircraftId: oneOf(p.aircraftId, AIRCRAFT_IDS, current.aircraftId),
           settings,
           cameraMode: settings.defaultCamera,
         }

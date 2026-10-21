@@ -6,6 +6,7 @@
  */
 
 import { useSyncExternalStore } from 'react'
+import type { AircraftId } from '../config/aircraftCatalog'
 import type { ChallengeProgress } from '../game/types'
 import type { Vec3 } from '../simulation/types'
 
@@ -48,6 +49,18 @@ export interface TelemetrySnapshot {
   position: Vec3
   challenge: ChallengeProgress | null
   nav: NavInfo
+  aircraftId: AircraftId
+  mach: number
+  /** Fan / propeller speed fraction 0..~1.05 (jets show this as N1 %). */
+  n1: number
+  afterburner: boolean
+  /** Gear extension 0 (up) .. 1 (down); lever position separately. */
+  gearPosition: number
+  gearLever: number
+  /** Speed brake extension 0..1. */
+  speedbrake: number
+  /** Reverse thrust command 0..1. */
+  reverse: number
 }
 
 export interface NavInfo {
@@ -90,6 +103,14 @@ export const INITIAL_TELEMETRY: Readonly<TelemetrySnapshot> = deepFreeze({
   position: { x: 0, y: 0, z: 0 },
   challenge: null,
   nav: { nearest: null, approach: null },
+  aircraftId: 'trainer',
+  mach: 0,
+  n1: 0,
+  afterburner: false,
+  gearPosition: 1,
+  gearLever: 1,
+  speedbrake: 0,
+  reverse: 0,
 })
 
 function deepFreeze<T extends object>(obj: T): T {
