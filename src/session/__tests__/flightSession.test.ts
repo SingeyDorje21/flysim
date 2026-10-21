@@ -1,12 +1,12 @@
 ﻿import { describe, expect, it } from 'vitest'
 import { RUNWAY, SPAWNS } from '../../config/world'
-import type { FlightResult } from '../../game/types'
+import type { FlightResult, GameMode } from '../../game/types'
 import { getTelemetry } from '../../state/telemetry'
 import { FlightSession } from '../FlightSession'
 
 const FRAME = 1 / 60
 
-function makeSession(mode: Parameters<typeof FlightSession.prototype.reset>[0]) {
+function makeSession(mode: GameMode) {
   const results: FlightResult[] = []
   const session = new FlightSession({ mode, onFinish: (r) => results.push(r) })
   session.reset(mode)
