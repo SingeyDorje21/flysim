@@ -2,7 +2,9 @@ import { CAMERA_MODES, type CameraMode } from '../game/types'
 import { useGameStore } from '../state/gameStore'
 import { useTelemetry } from '../state/telemetry'
 import { HUD_COMMANDS } from './controlsData'
-import { formatAltitude, formatSpeed, formatTime, formatVerticalSpeed } from './format'
+import { ApproachIndicator } from './Approach'
+import { formatAltitude, formatDistance, formatSpeed, formatTime, formatVerticalSpeed } from './format'
+import { Minimap } from './Minimap'
 import './Hud.css'
 
 const CAMERA_LABEL: Record<CameraMode, string> = { chase: 'Chase', cockpit: 'Cockpit', free: 'Free' }
@@ -50,6 +52,7 @@ export function Hud() {
   const setCameraMode = useGameStore((s) => s.setCameraMode)
   const showInstruments = useGameStore((s) => s.settings.showInstruments)
   const c = t.challenge
+  const nav = t.nav
   const lowAgl = t.heightAboveGround < 300 && !t.onGround
   const flapsLabel = `${flapDetent(t.flaps)} (${Math.round(t.flapsDeg)}°)`
 
@@ -71,28 +74,37 @@ export function Hud() {
           ))}
         </div>
 
-        {c && (
-          <div className={`hud-challenge status-${c.status}`} data-testid="challenge">
-            <div className="challenge-objective">{c.objective}</div>
-            {c.detail && <div className="challenge-detail">{c.detail}</div>}
-            {c.fraction !== null && (
-              <div
-                className="challenge-bar"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(Math.min(1, Math.max(0, c.fraction)) * 100)}
-                aria-label="Challenge progress"
-              >
-                <div style={{ width: `${Math.min(1, Math.max(0, c.fraction)) * 100}%` }} />
+        <div className="hud-topright">
+          {c && (
+            <div className={`hud-challenge status-${c.status}`} data-testid="challenge">
+              <div className="challenge-objective">{c.objective}</div>
+              {c.detail && <div className="challenge-detail">{c.detail}</div>}
+              {c.fraction !== null && (
+                <div
+                  className="challenge-bar"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(Math.min(1, Math.max(0, c.fraction)) * 100)}
+                  aria-label="Challenge progress"
+                >
+                  <div style={{ width: `${Math.min(1, Math.max(0, c.fraction)) * 100}%` }} />
+                </div>
+              )}
+              <div className="challenge-time">
+                {formatTime(c.elapsed)}
+                {c.timeLimit !== null ? ` / ${formatTime(c.timeLimit)}` : ''}
               </div>
-            )}
-            <div className="challenge-time">
-              {formatTime(c.elapsed)}
-              {c.timeLimit !== null ? ` / ${formatTime(c.timeLimit)}` : ''}
             </div>
-          </div>
-        )}
+          )}
+          <Minimap />
+          {nav.nearest && (
+            <div className="hud-nav" data-testid="hud-nav">
+              {nav.nearest.code} {nav.nearest.name} · {formatDistance(nav.nearest.distance, units)} ·{' '}
+              {String(Math.round(norm360(nav.nearest.bearingDeg)) % 360).padStart(3, '0')}&deg;
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="hud-alerts" aria-live="polite">
@@ -107,6 +119,8 @@ export function Hud() {
       </div>
 
       <HeadingTape heading={t.headingDeg} />
+
+      {nav.approach && <ApproachIndicator approach={nav.approach} units={units} />}
 
       <div className="hud-box hud-left">
         <div className="hud-label">AIRSPEED</div>

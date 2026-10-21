@@ -108,6 +108,14 @@ export function HowItWorks() {
               <strong>Top:</strong> heading tape and your current objective with its progress.
             </li>
             <li>
+              <strong>Top right:</strong> a minimap of nearby airports and the nearest airport's distance and
+              bearing. Press <kbd>M</kbd> for the full island map.
+            </li>
+            <li>
+              <strong>Approach guidance:</strong> when you line up with a runway, two scales show how far you are
+              from the centreline (horizontal) and the 3 degree glide path (vertical). Keep both diamonds centred.
+            </li>
+            <li>
               <strong>Bottom left:</strong> the key commands.
             </li>
             <li>

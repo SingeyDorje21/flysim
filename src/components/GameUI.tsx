@@ -4,12 +4,16 @@ import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES } from '../game/types'
 import { useGameStore, type Units } from '../state/gameStore'
 import { TIMES_OF_DAY } from '../world/types'
+import { AirportPicker, SelectionSummary } from './AirportPicker'
 import { ALL_BINDINGS } from './controlsData'
 import { formatStat, formatTime } from './format'
 import { HowItWorks } from './HowItWorks'
 import { Hud } from './Hud'
 import { InstrumentPanel } from './Instruments'
+import { WorldMap } from './WorldMap'
 import './GameUI.css'
+
+const AIRPORT_MODES: ReadonlySet<string> = new Set(['freeFlight', 'takeoff', 'landing'])
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -56,6 +60,7 @@ function ModeSelect() {
           Back
         </button>
       </div>
+      <AirportPicker />
       <div className="mode-grid">
         {GAME_MODES.map((m) => {
           const best = bestScores[m.id]
@@ -69,6 +74,9 @@ function ModeSelect() {
                   <li key={o}>{o}</li>
                 ))}
               </ul>
+              {AIRPORT_MODES.has(m.id) && (
+                <SelectionSummary label={m.id === 'landing' ? 'Destination' : 'Airport'} />
+              )}
               <dl className="mode-meta">
                 <div>
                   <dt>Time limit</dt>
@@ -416,6 +424,7 @@ export function GameUI() {
       {overlay === 'settings' && <SettingsPanel />}
       {overlay === 'controls' && <ControlsPanel />}
       {overlay === 'howItWorks' && <HowItWorks />}
+      {overlay === 'map' && <WorldMap />}
     </div>
   )
 }

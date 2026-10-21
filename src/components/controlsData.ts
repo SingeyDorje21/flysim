@@ -19,6 +19,7 @@ export const VIEW_BINDINGS: readonly Binding[] = [
   { action: 'Camera cycle / direct', keys: 'C / 1, 2, 3' },
   { action: 'Pause', keys: 'Esc or P' },
   { action: 'Toggle HUD / instruments', keys: 'H / I' },
+  { action: 'World map', keys: 'M' },
 ]
 
 export const ALL_BINDINGS: readonly Binding[] = [...FLIGHT_BINDINGS, ...VIEW_BINDINGS]
@@ -34,5 +35,6 @@ export const HUD_COMMANDS: readonly (readonly [string, string])[] = [
   ['. / ,', 'Trim'],
   ['C', 'Camera'],
   ['H / I', 'HUD / panel'],
+  ['M', 'Map'],
   ['Esc', 'Pause'],
 ]

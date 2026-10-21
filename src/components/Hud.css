@@ -184,3 +184,74 @@
   .hud-commands { display: none; }
   .hud-challenge { min-width: 0; }
 }
+
+/* Top-right column: challenge, minimap, nav readout. */
+.hud-topright {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+.hud-minimap {
+  width: 140px;
+  height: 140px;
+  pointer-events: none;
+}
+.mm-bg { fill: rgba(8, 20, 32, 0.55); stroke: var(--panel-border); stroke-width: 1.5; }
+.mm-ring { fill: none; stroke: rgba(255, 255, 255, 0.18); stroke-width: 0.6; }
+.mm-runway { stroke: var(--hud); stroke-width: 2.2; stroke-linecap: butt; }
+.mm-label { fill: var(--hud); font-size: 7px; font-family: var(--font-mono); }
+.mm-n { fill: var(--warning); font-size: 8px; font-weight: 700; font-family: var(--font-mono); }
+.mm-aircraft { fill: var(--accent); stroke: #04121d; stroke-width: 0.8; }
+.hud-nav {
+  font-size: 0.78rem;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  max-width: 280px;
+  text-align: right;
+}
+
+/* ILS-style approach guidance, near the centre of the screen. */
+.hud-approach {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  font-size: 0.8rem;
+}
+.approach-title { background: var(--panel); border-radius: 6px; padding: 2px 8px; }
+.approach-body { display: flex; align-items: center; gap: 10px; }
+.gs-scale { position: relative; width: 14px; height: 120px; }
+.loc-scale { position: absolute; top: 132px; left: 50%; width: 120px; height: 14px; transform: translateX(-50%); }
+.hud-approach .dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border: 1px solid var(--hud);
+  border-radius: 50%;
+  opacity: 0.8;
+}
+.gs-scale .dot { left: 50%; }
+.loc-scale .dot { top: 50%; }
+.hud-approach .dot.centre { background: var(--hud); }
+.hud-approach .diamond {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  background: #ff4fd8;
+  border: 1px solid #000;
+  transform: rotate(45deg);
+}
+.gs-scale .diamond { left: 50%; }
+.loc-scale .diamond { top: 50%; }
+.hud-approach { padding-bottom: 28px; }
