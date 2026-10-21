@@ -77,6 +77,16 @@ three 0.186.1, @react-three/fiber 9.8.2 (no drei), zustand 5.0.15, Vitest 5.0.5,
   instrument scales, jet engine sounds. Keys: G gear, V speed brake, Y reverse.
 - Gate: 476 tests passing.
 
+## Flight School (before Phase 4, at the user's request)
+- Guided take-off and landing lessons for every aircraft (`src/game/lessons.ts`, technique per aircraft in
+  `src/game/technique.ts`), with a coach panel: steps, instruction, keys, live target gauge and warnings.
+  A crash ends the lesson with a specific coaching tip.
+- Assists: tail-strike guard (height-aware, settable), plus approach autothrust and a flare assist in the landing lesson.
+- Physics: FBW flare mode, derotation law, gear-down g limits, nose-wheel hard-landing fix.
+- Voice callouts (Rotate, Positive rate, 500/100/50/40/30/20/10, Retard) and a step chime.
+- Every take-off and landing lesson is completed end-to-end by a coach-following scripted student (512 tests).
+- Phase 4 (off-runway crash rule) is on hold.
+
 ## Known limitations
 - No wind, prop torque/P-factor or asymmetric stall wing-drop; gear force is vertical.
 - No audio, gamepad or touch controls; keyboard + mouse (free-look) only.
