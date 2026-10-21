@@ -7,7 +7,7 @@
 
 import { useSyncExternalStore } from 'react'
 import type { AircraftId } from '../config/aircraftCatalog'
-import type { ChallengeProgress } from '../game/types'
+import type { ChallengeProgress, LessonView } from '../game/types'
 import type { Vec3 } from '../simulation/types'
 
 export interface TelemetrySnapshot {
@@ -61,6 +61,8 @@ export interface TelemetrySnapshot {
   speedbrake: number
   /** Reverse thrust command 0..1. */
   reverse: number
+  /** Flight School coach state while a lesson runs, else null. */
+  lesson: LessonView | null
 }
 
 export interface NavInfo {
@@ -111,6 +113,7 @@ export const INITIAL_TELEMETRY: Readonly<TelemetrySnapshot> = deepFreeze({
   gearLever: 1,
   speedbrake: 0,
   reverse: 0,
+  lesson: null,
 })
 
 function deepFreeze<T extends object>(obj: T): T {

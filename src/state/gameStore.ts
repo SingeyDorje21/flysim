@@ -14,7 +14,7 @@ import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES, type CameraMode, type FlightResult, type GameMode } from '../game/types'
 import { TIMES_OF_DAY, type TimeOfDay } from '../world/types'
 
-export type Screen = 'mainMenu' | 'modeSelect' | 'flight' | 'results'
+export type Screen = 'mainMenu' | 'modeSelect' | 'flightSchool' | 'flight' | 'results'
 /** Modal panels that can sit on top of any screen. */
 export type Overlay = 'none' | 'settings' | 'controls' | 'howItWorks' | 'map'
 /** imperial = knots, feet, ft/min. metric = km/h, metres, m/s. */
@@ -35,6 +35,10 @@ export interface Settings {
   /** Sound effects volume 0..1 (0 = muted). */
   masterVolume: number
   timeOfDay: TimeOfDay
+  /** Flight assists (tail-strike guard on the take-off roll). Always on in Flight School. */
+  assists: boolean
+  /** Spoken cockpit callouts ("Rotate", "50, 40, 30...", "Retard"). */
+  voiceCallouts: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -47,6 +51,8 @@ export const DEFAULT_SETTINGS: Settings = {
   mouseSensitivity: 1,
   masterVolume: 0.6,
   timeOfDay: 'noon',
+  assists: true,
+  voiceCallouts: true,
 }
 
 export interface GameState {
@@ -77,6 +83,7 @@ export interface GameState {
 
   goToMainMenu(): void
   goToModeSelect(): void
+  goToFlightSchool(): void
   openOverlay(overlay: Exclude<Overlay, 'none'>): void
   closeOverlay(): void
   startFlight(mode: GameMode): void
@@ -157,6 +164,8 @@ export function sanitizeSettings(raw: unknown): Settings {
       typeof sens === 'number' && Number.isFinite(sens) ? Math.min(3, Math.max(0.2, sens)) : d.mouseSensitivity,
     masterVolume: typeof vol === 'number' && Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : d.masterVolume,
     timeOfDay: oneOf(r.timeOfDay, TIMES_OF_DAY, d.timeOfDay),
+    assists: bool(r.assists, d.assists),
+    voiceCallouts: bool(r.voiceCallouts, d.voiceCallouts),
   }
 }
 
@@ -199,6 +208,8 @@ export const useGameStore = create<GameState>()(
       goToMainMenu: () => set({ screen: 'mainMenu', overlay: 'none', paused: false, result: null, newBest: false }),
       goToModeSelect: () =>
         set({ screen: 'modeSelect', overlay: 'none', paused: false, result: null, newBest: false }),
+      goToFlightSchool: () =>
+        set({ screen: 'flightSchool', overlay: 'none', paused: false, result: null, newBest: false }),
       openOverlay: (overlay) => set({ overlay }),
       closeOverlay: () => set({ overlay: 'none' }),
 

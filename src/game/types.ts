@@ -1,6 +1,45 @@
 import type { Vec3 } from '../simulation/types'
 
-export type GameMode = 'freeFlight' | 'takeoff' | 'landing' | 'rings'
+export type GameMode = 'freeFlight' | 'takeoff' | 'landing' | 'rings' | 'lessonTakeoff' | 'lessonLanding'
+
+/** Flight School lessons (guided, assists on). */
+export const LESSON_MODES: readonly GameMode[] = ['lessonTakeoff', 'lessonLanding']
+
+/** A live gauge for the current lesson step: the value, and the band to keep it in. */
+export interface LessonCue {
+  /** e.g. "Airspeed", "Pitch", "Height above ground". */
+  label: string
+  /** How to format value and target (SI; 'degrees' and 'percent' are plain). */
+  kind: 'speed' | 'altitude' | 'degrees' | 'percent'
+  value: number
+  /** Target band [min, max]; the step wants the value inside it. */
+  target: [number, number]
+  /** Scale shown on the gauge [min, max]. */
+  range: [number, number]
+}
+
+export interface LessonStepView {
+  title: string
+  done: boolean
+}
+
+/** What the coach panel shows (published with telemetry while a lesson runs). */
+export interface LessonView {
+  /** e.g. "A350-900 take-off". */
+  title: string
+  steps: LessonStepView[]
+  /** Index of the current step; steps.length when the lesson is complete. */
+  current: number
+  /** Full instruction for the current step. */
+  instruction: string
+  /** Keys to press right now, e.g. ["R"] or ["S", "gently"]. */
+  keys: string[]
+  cue: LessonCue | null
+  /** Corrective hint when the pilot is drifting off-target, else null. */
+  warning: string | null
+  /** Increments each time a step completes (for a tick animation / sound). */
+  stepCounter: number
+}
 
 export type CameraMode = 'chase' | 'cockpit' | 'free'
 

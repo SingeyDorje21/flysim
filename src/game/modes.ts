@@ -1,7 +1,9 @@
-import type { GameMode } from './types'
+﻿import type { GameMode } from './types'
 
 export interface GameModeInfo {
   id: GameMode
+  /** 'challenge' modes appear on Choose a mode; 'lesson' modes live in Flight School. */
+  kind: 'challenge' | 'lesson'
   name: string
   tagline: string
   description: string
@@ -13,6 +15,7 @@ export interface GameModeInfo {
 export const GAME_MODES: readonly GameModeInfo[] = [
   {
     id: 'freeFlight',
+    kind: 'challenge',
     name: 'Free Flight',
     tagline: 'Explore the island at your own pace',
     description:
@@ -22,6 +25,7 @@ export const GAME_MODES: readonly GameModeInfo[] = [
   },
   {
     id: 'takeoff',
+    kind: 'challenge',
     name: 'Take-off Challenge',
     tagline: 'Get airborne and climb out cleanly',
     description:
@@ -35,6 +39,7 @@ export const GAME_MODES: readonly GameModeInfo[] = [
   },
   {
     id: 'landing',
+    kind: 'challenge',
     name: 'Landing Challenge',
     tagline: 'Bring it down gently on runway 36',
     description:
@@ -48,12 +53,33 @@ export const GAME_MODES: readonly GameModeInfo[] = [
   },
   {
     id: 'rings',
+    kind: 'challenge',
     name: 'Ring Course',
     tagline: 'Thread the needle through every ring',
     description:
       'Start airborne south of the airport and fly through each ring in order. The next ring is highlighted. Fastest time wins.',
     objectives: ['Fly through every ring in order', 'Do not crash', 'Finish before the time runs out'],
     timeLimit: 360,
+  },
+  {
+    id: 'lessonTakeoff',
+    kind: 'lesson',
+    name: 'Take-off Lesson',
+    tagline: 'Step-by-step take-off with a coach',
+    description:
+      'A coach talks you through power, steering, rotation, gear and climb-out for the selected aircraft, with live targets and assists.',
+    objectives: ['Follow each step on the coach panel', 'Climb to 1,000 ft above the ground'],
+    timeLimit: null,
+  },
+  {
+    id: 'lessonLanding',
+    kind: 'lesson',
+    name: 'Landing Lesson',
+    tagline: 'Step-by-step landing with a coach',
+    description:
+      'Start on a stable final approach. The coach guides you down the glide path, through the flare and the rollout, with live targets and callouts.',
+    objectives: ['Follow each step on the coach panel', 'Touch down gently and stop on the runway'],
+    timeLimit: null,
   },
 ]
 
