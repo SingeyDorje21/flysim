@@ -4,6 +4,7 @@ import { QUALITY_PROFILES } from '../config/quality'
 import { KeyboardControls } from '../input/keyboard'
 import { useGameStore } from '../state/gameStore'
 import { FlightWorld } from '../world/FlightWorld'
+import { terrainSamplerForQuality } from '../world/terrain/terrainGrid'
 import { FlightSession } from './FlightSession'
 import { SimulationDriver } from './SimulationDriver'
 
@@ -21,9 +22,16 @@ export function FlightCanvas() {
   const invertPitch = useGameStore((s) => s.settings.invertPitch)
   const mouseSensitivity = useGameStore((s) => s.settings.mouseSensitivity)
 
+  // The drawn mesh and the physics ground share one triangulated grid per quality.
+  const terrain = terrainSamplerForQuality(quality)
   const [session] = useState(
-    () => new FlightSession({ mode, onFinish: (result) => useGameStore.getState().finishFlight(result) }),
+    () =>
+      new FlightSession({ mode, terrain, onFinish: (result) => useGameStore.getState().finishFlight(result) }),
   )
+
+  useEffect(() => {
+    session.setTerrain(terrain)
+  }, [session, terrain])
 
   // Start and every restart: back to the spawn, no stale state.
   useEffect(() => {
@@ -39,13 +47,19 @@ export function FlightCanvas() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || !KeyboardControls.isFlightKey(e.code)) return
-      if (!flightKeysActive()) return
+      if (!flightKeysActive()) {
+        // A flight key still held from the flight (e.g. Space for brakes) must
+        // not auto-repeat into a button focused by the next screen.
+        if (e.repeat || session.keyboard.isHeld(e.code)) e.preventDefault()
+        return
+      }
       session.keyboard.keyDown(e.code, e.repeat)
       e.preventDefault()
     }
     const onKeyUp = (e: KeyboardEvent) => {
+      const wasHeld = session.keyboard.isHeld(e.code)
       session.keyboard.keyUp(e.code)
-      if (KeyboardControls.isFlightKey(e.code) && flightKeysActive()) e.preventDefault()
+      if (wasHeld || (KeyboardControls.isFlightKey(e.code) && flightKeysActive())) e.preventDefault()
     }
     const onBlur = () => session.keyboard.releaseAll()
     window.addEventListener('keydown', onKeyDown)
@@ -71,7 +85,7 @@ export function FlightCanvas() {
         <SimulationDriver session={session} />
         <FlightWorld
           renderState={session.renderState}
-          terrain={session.terrain}
+          terrain={terrain}
           quality={quality}
           cameraMode={cameraMode}
           rings={mode === 'rings' ? session.ringView : null}

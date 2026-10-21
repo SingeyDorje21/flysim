@@ -116,7 +116,7 @@ const ringZ = RING_COURSE.map((r) => r.position.z)
 const ringCap = RING_COURSE.map((r) => r.position.y - RING_MARGIN)
 const RING_N = RING_COURSE.length
 
-const WATER_THRESHOLD = 0.3
+export const WATER_THRESHOLD = 0.3
 
 // ---------------------------------------------------------------- height
 
@@ -179,7 +179,7 @@ export function naturalHeightAt(x: number, z: number): number {
   return h
 }
 
-function isPavedAt(x: number, z: number): boolean {
+export function isPavedAt(x: number, z: number): boolean {
   for (let i = 0; i < PAVED_RECTS.length; i++) {
     const p = PAVED_RECTS[i]
     if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ) return true

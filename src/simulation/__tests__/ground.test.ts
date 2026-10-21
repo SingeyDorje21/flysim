@@ -112,7 +112,7 @@ describe('crashes', () => {
 
   it('a tail strike ends the flight', () => {
     const sim = makePhysics(groundSpawn())
-    quatFromAttitude(0, 15, 0, sim.state.orientation)
+    quatFromAttitude(0, 20, 0, sim.state.orientation)
     sim.step()
     expect(sim.state.crashed).toBe(true)
     expect(sim.state.crashReason).toBe(CRASH_REASONS.tail)

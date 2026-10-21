@@ -75,6 +75,10 @@ export class KeyboardControls {
     this.pressed.delete(code)
   }
 
+  isHeld(code: string): boolean {
+    return this.pressed.has(code)
+  }
+
   /** Release every key, e.g. when the window loses focus. */
   releaseAll(): void {
     this.pressed.clear()

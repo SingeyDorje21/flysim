@@ -191,6 +191,8 @@ export interface AircraftRenderState {
   airspeed: number
   onGround: boolean
   crashed: boolean
+  /** True while the simulation is paused or frozen; sim-driven animation (propeller) must hold still. */
+  frozen: boolean
   /**
    * Increments whenever the aircraft is teleported (spawn, restart). Cameras
    * and trails must snap instead of easing when this changes.

@@ -29,7 +29,7 @@ export const GAME_MODES: readonly GameModeInfo[] = [
     objectives: [
       'Stay on the runway until you lift off',
       'Climb to 500 ft (150 m) above the ground',
-      'Keep the wings within 30 degrees of level',
+      'Bonus: keep the wings within 30 degrees of level and stay on the centreline',
     ],
     timeLimit: 120,
   },
@@ -40,9 +40,9 @@ export const GAME_MODES: readonly GameModeInfo[] = [
     description:
       'You are on a 3-degree final approach, 2 miles out. Land on the runway, ideally near the aiming point, and stop on the paved surface.',
     objectives: [
-      'Touch down on the runway',
-      'Sink rate under 3 m/s (600 ft/min) at touchdown',
+      'Touch down on the runway - a sink rate over ~4.5 m/s (900 ft/min) is a crash',
       'Come to a complete stop on the runway',
+      'Bonus: gentle touchdown near the aiming point, on the centreline',
     ],
     timeLimit: 240,
   },

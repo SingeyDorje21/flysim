@@ -13,30 +13,32 @@ import { AircraftPhysics } from '../simulation/AircraftPhysics'
 import { FixedTimestep } from '../simulation/FixedTimestep'
 import { interpolatePose } from '../simulation/interpolate'
 import type { AircraftRenderState, FlightModel, TerrainSampler } from '../simulation/types'
+import { DEFAULT_SETTINGS } from '../state/gameStore'
 import { publishTelemetry, resetTelemetry } from '../state/telemetry'
-import { createTerrainSampler } from '../world/terrain/heightField'
+import { terrainSamplerForQuality } from '../world/terrain/terrainGrid'
 
 const TELEMETRY_INTERVAL = 1 / 30
 /** Real seconds between the flight being decided and the results screen. */
 const RESULT_DELAY = { success: 1.2, failure: 2.5 } as const
 const RAD2DEG = 180 / Math.PI
 
-let sharedTerrain: TerrainSampler | null = null
-
-/** The terrain is deterministic, so one instance serves every session. */
-export function getSharedTerrain(): TerrainSampler {
-  sharedTerrain ??= createTerrainSampler()
-  return sharedTerrain
-}
-
 export interface FlightSessionOptions {
   mode: GameMode
+  /** Ground the physics collides with; defaults to the mesh at default quality. */
   terrain?: TerrainSampler
   onFinish(result: FlightResult): void
 }
 
 export class FlightSession {
-  readonly terrain: TerrainSampler
+  /**
+   * Stable sampler handed to the physics. It forwards to the sampler of the
+   * currently drawn mesh, which setTerrain() swaps when the quality changes.
+   */
+  readonly terrain: TerrainSampler = {
+    heightAt: (x, z) => this.terrainTarget.heightAt(x, z),
+    surfaceAt: (x, z) => this.terrainTarget.surfaceAt(x, z),
+  }
+  private terrainTarget: TerrainSampler
   readonly physics: FlightModel
   readonly keyboard = new KeyboardControls()
   /** Stable object handed to the ring renderer; the ring challenge mutates nextIndex. */
@@ -52,7 +54,7 @@ export class FlightSession {
   private reported = false
 
   constructor(options: FlightSessionOptions) {
-    this.terrain = options.terrain ?? getSharedTerrain()
+    this.terrainTarget = options.terrain ?? terrainSamplerForQuality(DEFAULT_SETTINGS.quality)
     this.mode = options.mode
     this.onFinish = options.onFinish
     this.physics = new AircraftPhysics({ terrain: this.terrain, spawn: SPAWNS[this.mode] })
@@ -68,6 +70,7 @@ export class FlightSession {
       airspeed: s.airspeed,
       onGround: s.onGround,
       crashed: s.crashed,
+      frozen: false,
       teleportId: 0,
     }
     this.syncKeyboard()
@@ -75,6 +78,11 @@ export class FlightSession {
 
   get currentMode(): GameMode {
     return this.mode
+  }
+
+  /** Collide with the mesh that is actually drawn (call when the quality changes). */
+  setTerrain(terrain: TerrainSampler): void {
+    this.terrainTarget = terrain
   }
 
   /** Back to the spawn of `mode` with no leftover state. */
@@ -94,6 +102,7 @@ export class FlightSession {
 
   /** Called once per rendered frame. While frozen (paused, results) nothing advances. */
   frame(frameDt: number, frozen: boolean): void {
+    this.renderState.frozen = frozen
     if (frozen) return
     const alpha = this.timestep.advance(frameDt, this.stepOnce)
     this.syncRenderState(alpha)

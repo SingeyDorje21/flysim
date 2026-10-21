@@ -57,7 +57,8 @@ export const AIRCRAFT_GEOMETRY = {
 
   /** Parts that end the flight if they touch the ground. */
   strikePoints: {
-    tail: v(0, -0.55, 4.6),
+    // Underside of the drawn tail cone: strikes at ~17 deg nose-up on the mains.
+    tail: v(0, -0.08, 4.6),
     leftWingtip: v(-5.5, 0.08, 0.15),
     rightWingtip: v(5.5, 0.08, 0.15),
     propTip: v(0, -0.95, -3.35),

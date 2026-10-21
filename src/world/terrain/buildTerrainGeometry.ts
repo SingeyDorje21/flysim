@@ -1,6 +1,5 @@
 import { BufferAttribute, BufferGeometry, Color } from 'three'
-import { WORLD } from '../../config/world'
-import { naturalHeightAt } from './heightField'
+import { getTerrainGrid } from './terrainGrid'
 
 const C_SEABED = new Color(0x6f8f86)
 const C_SAND = new Color(0xd6c58f)
@@ -16,24 +15,22 @@ function smoothstep(a: number, b: number, x: number): number {
   return t * t * (3 - 2 * t)
 }
 
-/** Builds the terrain grid with vertex colours by height and slope. */
+/**
+ * Builds the terrain mesh with vertex colours by height and slope. Heights
+ * come from the shared grid that the terrain samplers also triangulate
+ * (terrainGrid.ts), so the drawn ground and the physics ground agree exactly.
+ */
 export function buildTerrainGeometry(segments: number): BufferGeometry {
-  const size = WORLD.terrainSize
-  const n = segments + 1
-  const step = size / segments
+  const { n, step, origin, heights } = getTerrainGrid(segments)
   const positions = new Float32Array(n * n * 3)
   const colors = new Float32Array(n * n * 3)
-  const heights = new Float32Array(n * n)
 
   for (let iz = 0; iz < n; iz++) {
-    const z = -size / 2 + iz * step
+    const z = origin + iz * step
     for (let ix = 0; ix < n; ix++) {
-      const x = -size / 2 + ix * step
-      const h = naturalHeightAt(x, z)
       const k = iz * n + ix
-      heights[k] = h
-      positions[k * 3] = x
-      positions[k * 3 + 1] = h
+      positions[k * 3] = origin + ix * step
+      positions[k * 3 + 1] = heights[k]
       positions[k * 3 + 2] = z
     }
   }

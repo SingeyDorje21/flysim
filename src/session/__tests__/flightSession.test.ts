@@ -95,6 +95,10 @@ describe('FlightSession integration (real terrain, physics and challenge)', () =
     expect(results[0].reason).toBeTruthy()
     fly(session, 5, () => {})
     expect(results).toHaveLength(1)
+    // The wreck's engine is stopped for rendering and instruments alike.
+    expect(session.renderState.engineRpm).toBe(0)
+    expect(getTelemetry().rpm).toBe(0)
+    expect(getTelemetry().engineRunning).toBe(false)
   })
 
   it('does not advance while frozen (pause)', () => {
@@ -103,6 +107,9 @@ describe('FlightSession integration (real terrain, physics and challenge)', () =
     const before = session.physics.state.simTime
     for (let i = 0; i < 120; i++) session.frame(FRAME, true)
     expect(session.physics.state.simTime).toBe(before)
+    expect(session.renderState.frozen).toBe(true)
+    session.frame(FRAME, false)
+    expect(session.renderState.frozen).toBe(false)
   })
 
   it('reset after a flight leaves no stale state', () => {

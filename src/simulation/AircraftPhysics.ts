@@ -391,6 +391,9 @@ export class AircraftPhysics implements FlightModel {
     s.angularVelocity.z = 0
     s.engine.spool = 0
     s.engine.thrust = 0
+    // The engine stops with the wreck (step() no longer runs to spool it down).
+    s.engine.rpm = 0
+    s.engine.running = false
     this.updateDerived()
   }
 

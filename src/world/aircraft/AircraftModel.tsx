@@ -309,7 +309,7 @@ export function AircraftModel({
     // into a translucent disc at high rpm.
     const omega = (rs.engineRpm * 2 * Math.PI) / 60
     const visOmega = 60 * Math.tanh(omega / 60)
-    p.prop.rotation.z += visOmega * Math.min(dt, 0.1)
+    if (!rs.frozen) p.prop.rotation.z += visOmega * Math.min(dt, 0.1)
     const blur = smoothstep(500, 1500, rs.engineRpm)
     p.bladeMat.opacity = 1 - 0.7 * blur
     p.discMat.opacity = 0.3 * blur
