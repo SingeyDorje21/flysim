@@ -210,6 +210,8 @@ export function Hud() {
         {!t.crashed && t.stalled && <div className="alert alert-stall flash">STALL</div>}
         {!t.crashed && !t.stalled && t.stallWarning && <div className="alert alert-warn flash">STALL WARNING</div>}
         {!t.crashed && t.onGround && <div className="alert alert-ground">ON GROUND</div>}
+        {/* Centre-screen too, so it shows even where the engine box is hidden (narrow screens). */}
+        {!t.crashed && gear.level === 'warn' && <div className="alert alert-stall flash">GEAR UP</div>}
       </div>
 
       <HeadingTape heading={t.headingDeg} />

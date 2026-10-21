@@ -32,7 +32,7 @@ export function SimulationDriver({ session, audio }: { session: FlightSession; a
         groundSpeed: s.groundSpeed,
         verticalSpeed: s.verticalSpeed,
         onGround: s.onGround,
-        stallWarning: s.stallWarning,
+        stallWarning: session.stallAlerts && s.stallWarning,
         crashed: s.crashed,
         ringsPassed: session.ringView.nextIndex,
         teleportId: session.renderState.teleportId,

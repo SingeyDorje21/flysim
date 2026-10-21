@@ -61,6 +61,20 @@ three 0.186.1, @react-three/fiber 9.8.2 (no drei), zustand 5.0.15, Vitest 5.0.5,
   nearest-airport readout and ILS-style approach guidance.
 - Gate: 292 tests passing.
 
+## Phase 3: selectable aircraft (same branch)
+- Five aircraft: FS-1 Trainer, F-22 Raptor, A220-300, A350-900, Global 8000. The catalog is
+  `src/config/aircraftCatalog.ts` (published specs and sources); physics configs are in `src/config/aircraft/`.
+- One physics model with:
+  - piston, turbofan and afterburning engines; ISA atmosphere to 20 km; Mach drag rise;
+  - retractable gear (refused on the ground), speed brakes, auto ground spoilers, reverse thrust;
+  - fly-by-wire (airliners: bank and AoA protection; F-22: 9 g limit, thrust vectoring).
+- Calibrated against published data. Every target is met except one: the A350 lifts off in ~1,500 m at its 80%-MTOW
+  game weight (it matches the published 2,600 m at MTOW).
+- Procedural models for all four jets with gear, surface, nozzle and afterburner animation; per-aircraft cameras.
+- Hangar picker, inline map preview with runway-length warnings, HUD gear/N1/Mach/AB/SPD BRK/REV, per-aircraft
+  instrument scales, jet engine sounds. Keys: G gear, V speed brake, Y reverse.
+- Gate: 476 tests passing.
+
 ## Known limitations
 - No wind, prop torque/P-factor or asymmetric stall wing-drop; gear force is vertical.
 - No audio, gamepad or touch controls; keyboard + mouse (free-look) only.

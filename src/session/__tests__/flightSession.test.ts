@@ -127,6 +127,51 @@ describe('FlightSession integration (real terrain, physics and challenge)', () =
     expect(results[0].timeSec).toBeLessThan(360)
   })
 
+  it('a gear-up press on the ground is refused and does not retract the gear at lift-off', () => {
+    const results: FlightResult[] = []
+    const session = new FlightSession({
+      mode: 'takeoff',
+      aircraft: 'a350',
+      place: { airportId: 'harbor', runwayEnd: '27' },
+      onFinish: (r) => results.push(r),
+    })
+    session.reset('takeoff', { airportId: 'harbor', runwayEnd: '27' })
+    const s = () => session.physics.state
+    session.keyboard.keyDown('KeyG') // refused: weight on wheels
+    session.keyboard.keyUp('KeyG')
+    hold(session, 'KeyR', true)
+    let airborne = 0
+    fly(
+      session,
+      90,
+      () => {
+        hold(session, 'KeyS', s().airspeed > 77 && s().pitchDeg < 8)
+        if (!s().onGround) airborne += FRAME
+      },
+      () => airborne > 8,
+    )
+    expect(airborne).toBeGreaterThan(8)
+    expect(s().controls.gear).toBe(1)
+    expect(s().gearPosition).toBe(1)
+    // Retracting in the air works.
+    session.keyboard.keyDown('KeyG')
+    fly(session, 12, () => {})
+    expect(s().gearPosition).toBeLessThan(0.05)
+  })
+
+  it('the F-22 never raises stall alerts, even manoeuvring hard', () => {
+    const session = new FlightSession({ mode: 'rings', aircraft: 'f22', onFinish: () => {} })
+    session.reset('rings')
+    hold(session, 'KeyS', true)
+    let warned = false
+    fly(session, 6, () => {
+      const t = getTelemetry()
+      if (t.stallWarning || t.stalled) warned = true
+    })
+    expect(warned).toBe(false)
+    expect(getTelemetry().aircraftId).toBe('f22')
+  })
+
   it('reports a crash once, after the result delay', () => {
     const { session, results } = makeSession('rings')
     hold(session, 'KeyW', true)

@@ -248,9 +248,9 @@ describe('persistence', () => {
     return m(persisted, initial) as State
   }
 
-  it('partializes only settings and bestScores', () => {
+  it('partializes only settings, bestScores and the chosen aircraft', () => {
     const partialize = useGameStore.persist.getOptions().partialize
-    expect(Object.keys(partialize?.(s()) ?? {}).sort()).toEqual(['bestScores', 'settings'])
+    expect(Object.keys(partialize?.(s()) ?? {}).sort()).toEqual(['aircraftId', 'bestScores', 'settings'])
   })
 
   it('keeps defaults for settings fields missing from storage', () => {

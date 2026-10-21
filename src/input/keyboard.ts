@@ -86,6 +86,15 @@ export class KeyboardControls {
     this.pressed.delete(code)
   }
 
+  /**
+   * Follow the gear lever the physics actually accepted: a gear-up command on
+   * the ground is refused, and must not come back as an automatic retraction
+   * at lift-off.
+   */
+  syncGear(accepted: number): void {
+    this.gear = accepted > 0.5 ? 1 : 0
+  }
+
   isHeld(code: string): boolean {
     return this.pressed.has(code)
   }

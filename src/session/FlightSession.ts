@@ -53,6 +53,11 @@ export class FlightSession {
   private readonly timestep: FixedTimestep
   private readonly onFinish: (result: FlightResult) => void
   readonly aircraftId: AircraftId
+  /**
+   * The F-22 manoeuvres routinely past the angle where its stall flags trip,
+   * so it gets no stall warning or horn (its flight controls protect it).
+   */
+  readonly stallAlerts: boolean
   private mode: GameMode
   private place: FlightPlace
   private challenge: Challenge
@@ -65,6 +70,7 @@ export class FlightSession {
     this.mode = options.mode
     this.place = options.place ?? HOME_PLACE
     this.aircraftId = options.aircraft ?? 'trainer'
+    this.stallAlerts = this.aircraftId !== 'f22'
     this.onFinish = options.onFinish
     this.physics = new AircraftPhysics({
       terrain: this.terrain,
@@ -153,6 +159,7 @@ export class FlightSession {
   private readonly stepOnce = (dt: number): void => {
     this.physics.setControls(this.keyboard.update(dt))
     this.physics.step()
+    this.keyboard.syncGear(this.physics.state.controls.gear)
     this.challenge.update(this.physics.state, dt)
   }
 
@@ -206,8 +213,8 @@ export class FlightSession {
       brakes: s.controls.brakes,
       trim: s.controls.trim,
       stick: { pitch: s.controls.pitch, roll: s.controls.roll, yaw: s.controls.yaw },
-      stallWarning: s.stallWarning,
-      stalled: s.stalled,
+      stallWarning: this.stallAlerts && s.stallWarning,
+      stalled: this.stallAlerts && s.stalled,
       onGround: s.onGround,
       crashed: s.crashed,
       crashReason: s.crashReason,

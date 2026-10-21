@@ -94,9 +94,15 @@ describe('terrain sampler', () => {
     }
     const flight = performance.now() - t0
     // Worst case: every call in a new cell, 16 km raster over the high range.
-    t0 = performance.now()
-    for (let i = 0; i < 200_000; i++) acc += s.heightAt(4000 + (i % 448) * 35.7, -28000 + Math.floor(i / 448) * 35.7)
-    const raster = performance.now() - t0
+    // Best of three cold runs (fresh sampler, empty cache), so a busy parallel
+    // test run measures the code rather than CPU contention.
+    let raster = Infinity
+    for (let run = 0; run < 3; run++) {
+      const cold = createTerrainSampler()
+      t0 = performance.now()
+      for (let i = 0; i < 200_000; i++) acc += cold.heightAt(4000 + (i % 448) * 35.7, -28000 + Math.floor(i / 448) * 35.7)
+      raster = Math.min(raster, performance.now() - t0)
+    }
     console.log(`sampler: flight path 200k ${flight.toFixed(1)} ms, raster 200k ${raster.toFixed(1)} ms (${acc > 0})`)
     // The physics access pattern carries the budget; the raster is a pathological
     // worst case (two fresh corners per call) with a looser bound for loaded CI machines.
