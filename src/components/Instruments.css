@@ -1,0 +1,53 @@
+.instrument-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  gap: clamp(2px, 0.6vw, 8px);
+  padding: 6px 10px 0;
+  width: min(100%, 980px);
+  justify-content: center;
+  background: linear-gradient(to top, rgba(6, 10, 18, 0.88), rgba(6, 10, 18, 0.55));
+  border: 1px solid var(--panel-border);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.gauge {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 150px;
+  aspect-ratio: 1;
+}
+.gauge-bezel { fill: #1b2332; stroke: #3b4a63; stroke-width: 2; }
+.gauge-face { fill: #080c14; }
+.tick { stroke: #aeb9cc; stroke-width: 1; }
+.tick.major { stroke: #e8eef8; stroke-width: 2; }
+.gauge-num { fill: #e8eef8; font: 600 11px var(--font-mono); }
+.gauge-num.small { font-size: 9px; }
+.gauge-num.cardinal { fill: var(--hud); font-size: 14px; }
+.gauge-title { fill: var(--text-dim); font: 600 9px var(--font-ui); letter-spacing: 0.08em; }
+.needle { stroke: #fff; stroke-width: 3; stroke-linecap: round; }
+.needle.thick { stroke-width: 5; }
+.hub { fill: #2a3548; stroke: #fff; stroke-width: 1; }
+.arc { fill: none; stroke-width: 5; }
+.arc-white { stroke: #f2f2f2; stroke-width: 3; }
+.arc-green { stroke: var(--success); }
+.arc-yellow { stroke: var(--warning); }
+.arc-red { stroke: var(--danger); }
+.redline { stroke: var(--danger); stroke-width: 3; }
+.sky { fill: #2f7fc8; }
+.ground { fill: #7a5430; }
+.horizon { stroke: #fff; stroke-width: 2; }
+.ladder { stroke: #fff; stroke-width: 1.5; }
+.pointer { fill: var(--warning); }
+.aircraft-ref { fill: none; stroke: var(--warning); stroke-width: 4; stroke-linecap: round; }
+.aircraft-dot { fill: var(--warning); }
+.plane { fill: var(--warning); }
+.plane-line { stroke: var(--warning); stroke-width: 3; stroke-linecap: round; }
+@media (max-width: 640px) {
+  .instrument-panel { padding: 4px 4px 0; }
+  .gauge:nth-child(n + 5) { display: none; }
+}
