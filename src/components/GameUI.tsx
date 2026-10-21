@@ -3,6 +3,7 @@ import { QUALITY_LEVELS } from '../config/quality'
 import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES } from '../game/types'
 import { useGameStore, type Units } from '../state/gameStore'
+import { TIMES_OF_DAY } from '../world/types'
 import { ALL_BINDINGS } from './controlsData'
 import { formatStat, formatTime } from './format'
 import { HowItWorks } from './HowItWorks'
@@ -252,6 +253,14 @@ function SettingsPanel() {
             value={settings.units}
             options={UNITS}
             onChange={(units) => updateSettings({ units })}
+          />
+        </Field>
+        <Field label="Time of day">
+          <Segmented
+            label="Time of day"
+            value={settings.timeOfDay}
+            options={TIMES_OF_DAY}
+            onChange={(timeOfDay) => updateSettings({ timeOfDay })}
           />
         </Field>
         <Field label="Default camera">

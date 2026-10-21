@@ -9,6 +9,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 import { QUALITY_LEVELS, type Quality } from '../config/quality'
 import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES, type CameraMode, type FlightResult, type GameMode } from '../game/types'
+import { TIMES_OF_DAY, type TimeOfDay } from '../world/types'
 
 export type Screen = 'mainMenu' | 'modeSelect' | 'flight' | 'results'
 /** Modal panels that can sit on top of any screen. */
@@ -30,6 +31,7 @@ export interface Settings {
   mouseSensitivity: number
   /** Sound effects volume 0..1 (0 = muted). */
   masterVolume: number
+  timeOfDay: TimeOfDay
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultCamera: 'chase',
   mouseSensitivity: 1,
   masterVolume: 0.6,
+  timeOfDay: 'noon',
 }
 
 export interface GameState {
@@ -139,6 +142,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     mouseSensitivity:
       typeof sens === 'number' && Number.isFinite(sens) ? Math.min(3, Math.max(0.2, sens)) : d.mouseSensitivity,
     masterVolume: typeof vol === 'number' && Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : d.masterVolume,
+    timeOfDay: oneOf(r.timeOfDay, TIMES_OF_DAY, d.timeOfDay),
   }
 }
 

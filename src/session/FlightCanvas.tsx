@@ -5,7 +5,7 @@ import { QUALITY_PROFILES } from '../config/quality'
 import { KeyboardControls } from '../input/keyboard'
 import { useGameStore } from '../state/gameStore'
 import { FlightWorld } from '../world/FlightWorld'
-import { terrainSamplerForQuality } from '../world/terrain/terrainGrid'
+import { getTerrainSampler } from '../world/terrain/terrainSampler'
 import { FlightSession } from './FlightSession'
 import { SimulationDriver } from './SimulationDriver'
 
@@ -23,8 +23,9 @@ export function FlightCanvas() {
   const invertPitch = useGameStore((s) => s.settings.invertPitch)
   const mouseSensitivity = useGameStore((s) => s.settings.mouseSensitivity)
 
-  // The drawn mesh and the physics ground share one triangulated grid per quality.
-  const terrain = terrainSamplerForQuality(quality)
+  // One ground for physics and rendering at every quality level.
+  const terrain = getTerrainSampler()
+  const timeOfDay = useGameStore((s) => s.settings.timeOfDay)
   const [session] = useState(
     () =>
       new FlightSession({ mode, terrain, onFinish: (result) => useGameStore.getState().finishFlight(result) }),
@@ -98,6 +99,7 @@ export function FlightCanvas() {
           cameraMode={cameraMode}
           rings={mode === 'rings' ? session.ringView : null}
           mouseSensitivity={mouseSensitivity}
+          timeOfDay={timeOfDay}
         />
       </Canvas>
     </div>

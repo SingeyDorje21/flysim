@@ -13,9 +13,8 @@ import { AircraftPhysics } from '../simulation/AircraftPhysics'
 import { FixedTimestep } from '../simulation/FixedTimestep'
 import { interpolatePose } from '../simulation/interpolate'
 import type { AircraftRenderState, FlightModel, TerrainSampler } from '../simulation/types'
-import { DEFAULT_SETTINGS } from '../state/gameStore'
 import { publishTelemetry, resetTelemetry } from '../state/telemetry'
-import { terrainSamplerForQuality } from '../world/terrain/terrainGrid'
+import { getTerrainSampler } from '../world/terrain/terrainSampler'
 
 const TELEMETRY_INTERVAL = 1 / 30
 /** Real seconds between the flight being decided and the results screen. */
@@ -54,7 +53,7 @@ export class FlightSession {
   private reported = false
 
   constructor(options: FlightSessionOptions) {
-    this.terrainTarget = options.terrain ?? terrainSamplerForQuality(DEFAULT_SETTINGS.quality)
+    this.terrainTarget = options.terrain ?? getTerrainSampler()
     this.mode = options.mode
     this.onFinish = options.onFinish
     this.physics = new AircraftPhysics({ terrain: this.terrain, spawn: SPAWNS[this.mode] })

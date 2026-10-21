@@ -10,10 +10,16 @@ export const WORLD = {
   /** Seed for every procedural generator. */
   seed: 1337,
   seaLevel: 0,
-  /** The playable island is roughly this radius around the origin (m). */
-  islandRadius: 7000,
-  /** Side length of the rendered terrain square (m). Ocean beyond. */
-  terrainSize: 16000,
+  /** The main island is roughly this radius around the origin (m). */
+  islandRadius: 38000,
+  /** Side length of the generated world square (m). Open ocean beyond. */
+  terrainSize: 100000,
+  /**
+   * Spacing (m) of the fixed triangulated grid the physics collides with.
+   * The nearest terrain level of detail is drawn on exactly this grid, so the
+   * ground you see near the aircraft is the ground you hit.
+   */
+  physicsGridStep: 30,
 } as const
 
 /**
