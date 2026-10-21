@@ -276,3 +276,11 @@
 .gs-scale .diamond { left: 50%; }
 .loc-scale .diamond { top: 50%; }
 .hud-approach { padding-bottom: 28px; }
+
+/* Gear and status flags */
+.gear.caution { color: #ffb454; }
+.gear.warn { color: #ff5a4f; font-weight: 700; }
+.hud-flags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0; }
+.hud-flags .flag { padding: 0 5px; border-radius: 4px; border: 1px solid currentColor; color: #ffb454; font-weight: 700; font-size: 0.85em; }
+.hud-flags .flag.warn { color: #ff8a4f; }
+.hud-flags .flag.ab { color: #ff6a2f; }

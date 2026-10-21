@@ -91,3 +91,16 @@ export function formatStat(stat: ResultStat, units: Units): string {
       return int(v)
   }
 }
+
+/** Runway-scale distances with thousands separators: "1,600 m" or "5,249 ft". */
+export function formatRunwayLength(m: number, units: Units): string {
+  const d = safe(m)
+  return units === 'imperial'
+    ? `${Math.round(d * M_TO_FT).toLocaleString('en-US')} ft`
+    : `${Math.round(d).toLocaleString('en-US')} m`
+}
+
+/** Short aircraft name for badges: "A350-900" -> "A350", "F-22 Raptor" -> "F-22". */
+export function shortAircraftName(name: string): string {
+  return name.split(' ')[0].replace(/-\d{3}$/, '')
+}

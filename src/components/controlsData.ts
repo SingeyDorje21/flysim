@@ -12,8 +12,14 @@ export const FLIGHT_BINDINGS: readonly Binding[] = [
   { action: 'Throttle up / down', keys: 'R / F, PageUp / PageDown, = / -' },
   { action: 'Flaps extend / retract', keys: '] or X / [ or Z' },
   { action: 'Brakes (hold)', keys: 'B or Space' },
+  { action: 'Landing gear up / down', keys: 'G' },
+  { action: 'Speed brake toggle', keys: 'V' },
+  { action: 'Reverse thrust (hold, on the ground)', keys: 'Y' },
   { action: 'Elevator trim nose up / down', keys: '. / ,' },
 ]
+
+/** F-22 afterburner has no key: it lights at full throttle. */
+export const AFTERBURNER_NOTE = 'The F-22 afterburner engages automatically at full throttle (above 95%).'
 
 export const VIEW_BINDINGS: readonly Binding[] = [
   { action: 'Camera cycle / direct', keys: 'C / 1, 2, 3' },
@@ -32,6 +38,9 @@ export const HUD_COMMANDS: readonly (readonly [string, string])[] = [
   ['R / F', 'Throttle'],
   ['X / Z', 'Flaps'],
   ['B', 'Brakes'],
+  ['G', 'Gear'],
+  ['V', 'Speed brk'],
+  ['Y', 'Reverse'],
   ['. / ,', 'Trim'],
   ['C', 'Camera'],
   ['H / I', 'HUD / panel'],

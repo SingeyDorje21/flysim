@@ -177,3 +177,33 @@ kbd {
 .map-scale rect { fill: #fff; }
 .map-scale text, .map-north text { fill: #fff; font-family: var(--font-mono); }
 .map-north polygon { fill: #fff; }
+
+/* Map preview inside the airport picker */
+.picker-body { display: grid; grid-template-columns: minmax(260px, 380px) 1fr; gap: 12px; align-items: start; }
+.map-preview .world-map.inline { width: 100%; max-height: none; }
+.picker-body .airport-list { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+@media (max-width: 760px) { .picker-body { grid-template-columns: 1fr; } .map-preview { max-width: 420px; width: 100%; margin: 0 auto; } }
+.map-airport.short { opacity: 0.45; }
+.map-ring { fill: none; stroke: var(--warning); stroke-width: 160; }
+.map-approach { fill: var(--warning); stroke: #000; stroke-width: 120; }
+.airport-opt.short { border-style: dashed; }
+.runway-warning { grid-column: 1 / -1; margin-top: 4px; font-size: 0.72rem; color: #ffb454; }
+.runway-warning::before { content: "A0  "; }
+
+/* Hangar */
+.hangar { max-width: 1100px; margin: 0 auto 16px; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+.aircraft-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.aircraft-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--panel-border); border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+.aircraft-card.selected { border-color: var(--accent); background: rgba(80, 180, 255, 0.18); }
+.aircraft-head { display: flex; gap: 10px; align-items: center; }
+.aircraft-head h4 { margin: 0; }
+.aircraft-sub { font-size: 0.75rem; color: var(--text-dim); }
+.aircraft-icon { width: 56px; height: 34px; flex: none; fill: var(--accent); }
+.aircraft-blurb { margin: 0; font-size: 0.85rem; }
+.link-btn { align-self: flex-start; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; font-size: 0.8rem; }
+.aircraft-specs { margin: 0; display: grid; gap: 2px; font-size: 0.78rem; }
+.aircraft-specs div { display: flex; justify-content: space-between; gap: 8px; }
+.aircraft-specs dt { color: var(--text-dim); }
+.aircraft-specs dd { margin: 0; text-align: right; }
+.aircraft-sources { margin: 0; font-size: 0.65rem; color: var(--text-dim); }
+.aircraft-card .btn { margin-top: auto; padding: 6px 12px; font-size: 0.9rem; }

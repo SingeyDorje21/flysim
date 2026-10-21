@@ -1,7 +1,9 @@
+import { getAircraft } from '../config/aircraftCatalog'
 import { AIRPORTS, AIRPORT_CLASS_LABEL, getAirport } from '../config/airports'
 import { runwayEnds } from '../game/airportGeometry'
 import { useGameStore } from '../state/gameStore'
-import { formatDistance } from './format'
+import { formatDistance, formatRunwayLength, shortAircraftName } from './format'
+import { MapPreview } from './WorldMap'
 
 /** Choose an airport and a runway end (shared selection in the game store). */
 export function AirportPicker() {
@@ -10,6 +12,8 @@ export function AirportPicker() {
   const units = useGameStore((s) => s.settings.units)
   const selectAirport = useGameStore((s) => s.selectAirport)
   const openOverlay = useGameStore((s) => s.openOverlay)
+  const aircraftId = useGameStore((s) => s.aircraftId)
+  const aircraft = getAircraft(aircraftId)
   const current = getAirport(airportId)
   const ends = runwayEnds(current)
 
@@ -21,10 +25,13 @@ export function AirportPicker() {
           World map
         </button>
       </div>
+      <div className="picker-body">
+      <MapPreview minRunway={aircraft.minRunway} />
       <div className="airport-list" role="radiogroup" aria-label="Airport">
         {AIRPORTS.map((a) => {
           const [a1, a2] = runwayEnds(a)
           const active = a.id === airportId
+          const short = a.runway.length < aircraft.minRunway
           return (
             <button
               key={a.id}
@@ -32,7 +39,7 @@ export function AirportPicker() {
               role="radio"
               aria-checked={active}
               aria-label={`${a.code} ${a.name}`}
-              className={active ? 'airport-opt active' : 'airport-opt'}
+              className={`airport-opt${active ? ' active' : ''}${short ? ' short' : ''}`}
               onClick={() => selectAirport(a.id)}
             >
               <span className="airport-code">{a.code}</span>
@@ -40,9 +47,16 @@ export function AirportPicker() {
               <span className="airport-meta">
                 {AIRPORT_CLASS_LABEL[a.class]} · RWY {a1.designator}/{a2.designator} · {formatDistance(a.runway.length, units)}
               </span>
+              {short && (
+                <span className="runway-warning" data-testid={`runway-warning-${a.code}`}>
+                  Runway {formatRunwayLength(a.runway.length, units)} — {shortAircraftName(aircraft.name)} needs{' '}
+                  {formatRunwayLength(aircraft.minRunway, units)}
+                </span>
+              )}
             </button>
           )
         })}
+      </div>
       </div>
       <div className="field">
         <span className="field-label">Runway end</span>

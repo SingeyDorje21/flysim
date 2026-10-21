@@ -5,8 +5,9 @@ import { CAMERA_MODES } from '../game/types'
 import { useGameStore, type Units } from '../state/gameStore'
 import { TIMES_OF_DAY } from '../world/types'
 import { AirportPicker, SelectionSummary } from './AirportPicker'
-import { ALL_BINDINGS } from './controlsData'
+import { AFTERBURNER_NOTE, ALL_BINDINGS } from './controlsData'
 import { formatStat, formatTime } from './format'
+import { Hangar } from './Hangar'
 import { HowItWorks } from './HowItWorks'
 import { Hud } from './Hud'
 import { InstrumentPanel } from './Instruments'
@@ -60,6 +61,7 @@ function ModeSelect() {
           Back
         </button>
       </div>
+      <Hangar />
       <AirportPicker />
       <div className="mode-grid">
         {GAME_MODES.map((m) => {
@@ -391,6 +393,7 @@ function ControlsPanel() {
           </tbody>
         </table>
         <p className="note">Hold the mouse button and drag to look around in free camera mode.</p>
+        <p className="note">{AFTERBURNER_NOTE}</p>
         <div className="menu-buttons row">
           <button type="button" className="btn primary" autoFocus onClick={closeOverlay}>
             Close

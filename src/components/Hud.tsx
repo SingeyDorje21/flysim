@@ -1,3 +1,4 @@
+import { getAircraft } from '../config/aircraftCatalog'
 import { CAMERA_MODES, type CameraMode } from '../game/types'
 import { useGameStore } from '../state/gameStore'
 import { useTelemetry } from '../state/telemetry'
@@ -15,6 +16,14 @@ const FLAP_DETENTS = ['UP', '1', '2', 'FULL']
 function flapDetent(lever: number): string {
   const idx = Math.min(FLAP_DETENTS.length - 1, Math.max(0, Math.round(lever * (FLAP_DETENTS.length - 1))))
   return FLAP_DETENTS[idx]
+}
+
+type GearState = { label: 'UP' | 'DOWN' | 'TRANSIT'; level: '' | 'caution' | 'warn' }
+
+function gearState(position: number, lowDescending: boolean): GearState {
+  if (position >= 0.99) return { label: 'DOWN', level: '' }
+  if (position <= 0.01) return { label: 'UP', level: lowDescending ? 'warn' : '' }
+  return { label: 'TRANSIT', level: 'caution' }
 }
 
 const CARDINALS: Record<number, string> = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }
@@ -54,6 +63,8 @@ export function Hud() {
   const c = t.challenge
   const nav = t.nav
   const lowAgl = t.heightAboveGround < 300 && !t.onGround
+  const isJet = getAircraft(t.aircraftId).engineKind !== 'piston'
+  const gear = gearState(t.gearPosition, t.heightAboveGround < 300 && !t.onGround && t.verticalSpeed < 0)
   const flapsLabel = `${flapDetent(t.flaps)} (${Math.round(t.flapsDeg)}°)`
 
   return (
@@ -135,9 +146,28 @@ export function Hud() {
           <div className="hud-meter" aria-hidden="true">
             <div style={{ width: `${Math.min(1, Math.max(0, t.throttle)) * 100}%` }} />
           </div>
+          {isJet ? (
+            <div className="hud-row">
+              <span>N1</span>
+              <span data-testid="hud-n1">{Math.round(t.n1 * 100)}%</span>
+            </div>
+          ) : (
+            <div className="hud-row">
+              <span>RPM</span>
+              <span>{Math.round(t.rpm)}</span>
+            </div>
+          )}
+          {t.mach > 0.3 && (
+            <div className="hud-row">
+              <span>MACH</span>
+              <span data-testid="hud-mach">{t.mach.toFixed(2)}</span>
+            </div>
+          )}
           <div className="hud-row">
-            <span>RPM</span>
-            <span>{Math.round(t.rpm)}</span>
+            <span>GEAR</span>
+            <span className={`gear ${gear.level}`} data-testid="hud-gear">
+              {gear.label}
+            </span>
           </div>
           <div className="hud-row">
             <span>FLAPS</span>
@@ -147,6 +177,13 @@ export function Hud() {
             <span>BRAKES</span>
             <span className={t.brakes > 0.05 ? 'on' : ''}>{t.brakes > 0.05 ? `${Math.round(t.brakes * 100)}%` : 'OFF'}</span>
           </div>
+          {(t.speedbrake > 0.05 || t.reverse > 0 || t.afterburner) && (
+            <div className="hud-flags" data-testid="hud-flags">
+              {t.speedbrake > 0.05 && <span className="flag">SPD BRK</span>}
+              {t.reverse > 0 && <span className="flag warn">REV</span>}
+              {t.afterburner && <span className="flag ab">AB</span>}
+            </div>
+          )}
           <div className="hud-row">
             <span>TRIM</span>
             <span>{t.trim > 0 ? '+' : ''}{(t.trim * 100).toFixed(0)}%</span>
