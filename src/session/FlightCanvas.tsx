@@ -26,9 +26,15 @@ export function FlightCanvas() {
   // One ground for physics and rendering at every quality level.
   const terrain = getTerrainSampler()
   const timeOfDay = useGameStore((s) => s.settings.timeOfDay)
+  // The aircraft is fixed while the canvas is mounted (it can only change from the menus).
   const [session] = useState(
     () =>
-      new FlightSession({ mode, terrain, onFinish: (result) => useGameStore.getState().finishFlight(result) }),
+      new FlightSession({
+        mode,
+        terrain,
+        aircraft: useGameStore.getState().aircraftId,
+        onFinish: (result) => useGameStore.getState().finishFlight(result),
+      }),
   )
 
   useEffect(() => {

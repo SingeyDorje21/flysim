@@ -3,6 +3,7 @@
  * physics step and eventually produces a FlightResult. Pure TS, no React.
  */
 
+import { getAircraft, type AircraftId } from '../config/aircraftCatalog'
 import { getAirport } from '../config/airports'
 import type { AircraftState } from '../simulation/types'
 import { getRunwayEnd, inRect, runwayAt, runwayRect, toLocal, type OrientedRect, type RunwayEnd } from './airportGeometry'
@@ -23,6 +24,7 @@ export const TAKEOFF_TARGET_AGL = 150
 /** Airborne this long before a lift-off counts (filters bounces). */
 const LIFTOFF_CONFIRM = 1
 const STOPPED_SPEED = 0.5
+const KNOT = 0.514444
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 const finalScore = (raw: number) => Math.round(clamp(raw, 100, 1000))
@@ -141,11 +143,15 @@ class TakeoffChallenge extends BaseChallenge {
   /** Start position, measured along the runway heading. */
   private readonly startAlong: number
 
-  constructor(place: FlightPlace) {
+  /** Rotation speed hint for the objective (knots). */
+  private readonly rotateKt: number
+
+  constructor(place: FlightPlace, aircraftId: AircraftId) {
     super('takeoff')
     this.rect = runwayRect(getAirport(place.airportId))
-    const start = spawnFor('takeoff', place).position
+    const start = spawnFor('takeoff', place, aircraftId).position
     this.startAlong = this.along(start.x, start.z)
+    this.rotateKt = Math.round(getAircraft(aircraftId).speeds.rotate / KNOT)
   }
 
   /** Signed distance along the direction of the take-off. */
@@ -201,7 +207,7 @@ class TakeoffChallenge extends BaseChallenge {
   protected describe(): Description {
     if (!this.liftoff) {
       return {
-        objective: 'Full power (R), rotate at 55 kt (S)',
+        objective: `Full power (R), rotate at ${this.rotateKt} kt (S)`,
         detail: 'Stay on the runway centreline',
         fraction: 0,
       }
@@ -224,11 +230,11 @@ class LandingChallenge extends BaseChallenge {
   private readonly rect: OrientedRect
   private readonly startDist: number
 
-  constructor(place: FlightPlace) {
+  constructor(place: FlightPlace, aircraftId: AircraftId) {
     super('landing')
     this.end = getRunwayEnd(place.airportId, place.runwayEnd)
     this.rect = runwayRect(this.end.airport)
-    const start = spawnFor('landing', place).position
+    const start = spawnFor('landing', place, aircraftId).position
     this.startDist = Math.hypot(start.x - this.end.aimPoint.x, start.z - this.end.aimPoint.z)
   }
 
@@ -355,14 +361,19 @@ class RingChallenge extends BaseChallenge {
  * ringView is required for 'rings' and ignored otherwise. `place` is the
  * airport and runway end for take-off and landing (defaults to the home field).
  */
-export function createChallenge(mode: GameMode, ringView?: RingCourseView, place: FlightPlace = HOME_PLACE): Challenge {
+export function createChallenge(
+  mode: GameMode,
+  ringView?: RingCourseView,
+  place: FlightPlace = HOME_PLACE,
+  aircraftId: AircraftId = 'trainer',
+): Challenge {
   switch (mode) {
     case 'freeFlight':
       return new FreeFlightChallenge(mode)
     case 'takeoff':
-      return new TakeoffChallenge(place)
+      return new TakeoffChallenge(place, aircraftId)
     case 'landing':
-      return new LandingChallenge(place)
+      return new LandingChallenge(place, aircraftId)
     case 'rings':
       if (!ringView) throw new Error('Ring course needs a ring view')
       return new RingChallenge(ringView)

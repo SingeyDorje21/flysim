@@ -18,6 +18,10 @@ interface Graph {
   windGain: GainNode
   rollGain: GainNode
   hornGain: GainNode
+  whineOsc: OscillatorNode
+  whineGain: GainNode
+  roarGain: GainNode
+  afterburnerGain: GainNode
   sources: AudioScheduledSourceNode[]
 }
 
@@ -95,7 +99,49 @@ function build(ctx: AudioContext): Graph {
   horn.start()
   sources.push(horn)
 
-  return { ctx, noise, sources, master, engineOscs, engineFilter, engineGain, windFilter, windGain, rollGain, hornGain }
+  // Jets: a band-passed turbine whine, a broadband exhaust roar and an afterburner rumble.
+  const whineOsc = ctx.createOscillator()
+  whineOsc.type = 'sawtooth'
+  const whineFilter = ctx.createBiquadFilter()
+  whineFilter.type = 'bandpass'
+  whineFilter.Q.value = 4
+  const whineGain = ctx.createGain()
+  whineGain.gain.value = 0
+  whineOsc.connect(whineFilter).connect(whineGain).connect(master)
+  whineOsc.start()
+  sources.push(whineOsc)
+  const roarFilter = ctx.createBiquadFilter()
+  roarFilter.type = 'lowpass'
+  roarFilter.frequency.value = 700
+  const roarGain = ctx.createGain()
+  roarGain.gain.value = 0
+  roarFilter.connect(roarGain).connect(master)
+  loopNoise(ctx, noise, sources, roarFilter)
+  const abFilter = ctx.createBiquadFilter()
+  abFilter.type = 'lowpass'
+  abFilter.frequency.value = 140
+  const afterburnerGain = ctx.createGain()
+  afterburnerGain.gain.value = 0
+  abFilter.connect(afterburnerGain).connect(master)
+  loopNoise(ctx, noise, sources, abFilter)
+
+  return {
+    ctx,
+    noise,
+    sources,
+    master,
+    engineOscs,
+    engineFilter,
+    engineGain,
+    windFilter,
+    windGain,
+    rollGain,
+    hornGain,
+    whineOsc,
+    whineGain,
+    roarGain,
+    afterburnerGain,
+  }
 }
 
 /** Short decaying burst of filtered noise. */
@@ -183,6 +229,11 @@ export class FlightAudio {
     g.windGain.gain.setTargetAtTime(lv.windGain, t, 0.15)
     g.rollGain.gain.setTargetAtTime(lv.rollGain, t, SMOOTH)
     g.hornGain.gain.setTargetAtTime(lv.hornOn ? 0.06 : 0, t, 0.02)
+    g.whineOsc.frequency.setTargetAtTime(lv.whineFreq, t, 0.15)
+    g.whineGain.gain.setTargetAtTime(lv.whineGain, t, 0.15)
+    g.roarGain.gain.setTargetAtTime(lv.roarGain, t, 0.2)
+    // The afterburner lights with a thump and fades out slowly.
+    g.afterburnerGain.gain.setTargetAtTime(lv.afterburnerGain, t, lv.afterburnerGain > 0 ? 0.08 : 0.4)
 
     if (!frame.frozen) for (const e of events) play(g, e)
   }

@@ -4,6 +4,7 @@
  * Owned by the orchestrator.
  */
 
+import type { AircraftId } from '../config/aircraftCatalog'
 import { approachGuidance, nearestAirport } from '../game/airportGeometry'
 import { createChallenge, type Challenge } from '../game/challenges'
 import { HOME_PLACE, spawnFor, type FlightPlace } from '../game/spawns'
@@ -28,6 +29,8 @@ export interface FlightSessionOptions {
   terrain?: TerrainSampler
   /** Airport and runway end for the start (and the landing target). Defaults to the home field. */
   place?: FlightPlace
+  /** Aircraft type for this session (fixed for its lifetime). Default 'trainer'. */
+  aircraft?: AircraftId
   onFinish(result: FlightResult): void
 }
 
@@ -49,6 +52,7 @@ export class FlightSession {
 
   private readonly timestep: FixedTimestep
   private readonly onFinish: (result: FlightResult) => void
+  readonly aircraftId: AircraftId
   private mode: GameMode
   private place: FlightPlace
   private challenge: Challenge
@@ -60,10 +64,15 @@ export class FlightSession {
     this.terrainTarget = options.terrain ?? getTerrainSampler()
     this.mode = options.mode
     this.place = options.place ?? HOME_PLACE
+    this.aircraftId = options.aircraft ?? 'trainer'
     this.onFinish = options.onFinish
-    this.physics = new AircraftPhysics({ terrain: this.terrain, spawn: spawnFor(this.mode, this.place) })
+    this.physics = new AircraftPhysics({
+      terrain: this.terrain,
+      spawn: spawnFor(this.mode, this.place, this.aircraftId),
+      aircraft: this.aircraftId,
+    })
     this.timestep = new FixedTimestep({ dt: this.physics.fixedDt })
-    this.challenge = createChallenge(this.mode, this.ringView, this.place)
+    this.challenge = createChallenge(this.mode, this.ringView, this.place, this.aircraftId)
     const s = this.physics.state
     this.renderState = {
       position: { ...s.position },
@@ -71,6 +80,12 @@ export class FlightSession {
       velocity: { ...s.velocity },
       surfaces: { ...s.surfaces },
       engineRpm: s.engine.rpm,
+      aircraftId: this.aircraftId,
+      n1: s.engine.n1,
+      afterburner: s.engine.afterburner,
+      gearPosition: s.gearPosition,
+      speedbrakePosition: s.speedbrakePosition,
+      thrustVector: s.thrustVector,
       airspeed: s.airspeed,
       onGround: s.onGround,
       crashed: s.crashed,
@@ -93,9 +108,9 @@ export class FlightSession {
   reset(mode: GameMode = this.mode, place: FlightPlace = this.place): void {
     this.mode = mode
     this.place = place
-    this.physics.reset(spawnFor(mode, place))
+    this.physics.reset(spawnFor(mode, place, this.aircraftId))
     this.timestep.reset()
-    this.challenge = createChallenge(mode, this.ringView, place)
+    this.challenge = createChallenge(mode, this.ringView, place, this.aircraftId)
     this.syncKeyboard()
     this.telemetryClock = 0
     this.resultDelay = null
@@ -143,7 +158,7 @@ export class FlightSession {
 
   private syncKeyboard(): void {
     const c = this.physics.state.controls
-    this.keyboard.reset({ throttle: c.throttle, flaps: c.flaps, trim: c.trim })
+    this.keyboard.reset({ throttle: c.throttle, flaps: c.flaps, trim: c.trim, gear: c.gear, speedbrake: c.speedbrake })
   }
 
   private syncRenderState(alpha: number): void {
@@ -159,6 +174,11 @@ export class FlightSession {
     r.surfaces.rudder = s.surfaces.rudder
     r.surfaces.flaps = s.surfaces.flaps
     r.engineRpm = s.engine.rpm
+    r.n1 = s.engine.n1
+    r.afterburner = s.engine.afterburner
+    r.gearPosition = s.gearPosition
+    r.speedbrakePosition = s.speedbrakePosition
+    r.thrustVector = s.thrustVector
     r.airspeed = s.airspeed
     r.onGround = s.onGround
     r.crashed = s.crashed
@@ -195,6 +215,14 @@ export class FlightSession {
       position: { ...s.position },
       challenge: this.challenge.progress,
       nav: this.navInfo(),
+      aircraftId: this.aircraftId,
+      mach: s.mach,
+      n1: s.engine.n1,
+      afterburner: s.engine.afterburner,
+      gearPosition: s.gearPosition,
+      gearLever: s.controls.gear,
+      speedbrake: s.speedbrakePosition,
+      reverse: s.controls.reverse,
     })
   }
 

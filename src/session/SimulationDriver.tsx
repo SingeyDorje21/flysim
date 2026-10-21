@@ -1,5 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import type { FlightAudio } from '../audio/FlightAudio'
+import { getAircraft } from '../config/aircraftCatalog'
 import { useGameStore } from '../state/gameStore'
 import type { FlightSession } from './FlightSession'
 
@@ -10,6 +11,7 @@ import type { FlightSession } from './FlightSession'
  * automatic rendering.
  */
 export function SimulationDriver({ session, audio }: { session: FlightSession; audio: FlightAudio }) {
+  const engineKind = getAircraft(session.aircraftId).engineKind
   useFrame((_, delta) => {
     const { paused, screen, overlay } = useGameStore.getState()
     const frozen = paused || overlay !== 'none' || screen !== 'flight'
@@ -18,6 +20,9 @@ export function SimulationDriver({ session, audio }: { session: FlightSession; a
     const s = session.physics.state
     audio.update(
       {
+        engineKind,
+        n1: s.engine.n1,
+        afterburner: s.engine.afterburner,
         rpm: s.engine.rpm,
         spool: s.engine.spool,
         engineRunning: s.engine.running,
