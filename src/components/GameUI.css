@@ -143,3 +143,79 @@ kbd {
   font-size: 0.85em;
   background: rgba(255, 255, 255, 0.06);
 }
+
+/* Airport picker and map */
+.airport-picker { max-width: 1100px; margin: 0 auto 16px; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+.picker-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.airport-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.airport-opt {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.airport-opt:hover { border-color: var(--accent); }
+.airport-opt.active { border-color: var(--accent); background: rgba(80, 180, 255, 0.18); }
+.airport-code { font-family: var(--font-mono); font-weight: 700; color: var(--accent); }
+.airport-meta { grid-column: 1 / -1; font-size: 0.75rem; color: var(--text-dim); }
+.selection-line { margin: 0; font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); }
+.map-panel { width: min(92vw, 760px); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.world-map { width: 100%; max-height: 70vh; aspect-ratio: 1; border-radius: 8px; background: #0b2540; }
+.map-sea { fill: #0b2540; }
+.map-land rect { fill: #3d5a3a; stroke: #3d5a3a; stroke-width: 200; stroke-linejoin: round; }
+.map-runway { stroke: #f2f2f2; }
+.map-airport.active .map-runway { stroke: var(--warning); }
+.map-label { fill: #fff; font-family: var(--font-mono); font-weight: 700; paint-order: stroke; stroke: #000; stroke-width: 120; }
+.map-hit { fill: transparent; }
+.map-aircraft { fill: var(--accent); stroke: #000; stroke-width: 150; }
+.map-scale rect { fill: #fff; }
+.map-scale text, .map-north text { fill: #fff; font-family: var(--font-mono); }
+.map-north polygon { fill: #fff; }
+
+/* Map preview inside the airport picker */
+.picker-body { display: grid; grid-template-columns: minmax(260px, 380px) 1fr; gap: 12px; align-items: start; }
+.map-preview .world-map.inline { width: 100%; max-height: none; }
+.picker-body .airport-list { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+@media (max-width: 760px) { .picker-body { grid-template-columns: 1fr; } .map-preview { max-width: 420px; width: 100%; margin: 0 auto; } }
+.map-airport.short { opacity: 0.45; }
+.map-ring { fill: none; stroke: var(--warning); stroke-width: 160; }
+.map-approach { fill: var(--warning); stroke: #000; stroke-width: 120; }
+.airport-opt.short { border-style: dashed; }
+.runway-warning { grid-column: 1 / -1; margin-top: 4px; font-size: 0.72rem; color: #ffb454; }
+.runway-warning::before { content: "A0  "; }
+
+/* Hangar */
+.hangar { max-width: 1100px; margin: 0 auto 16px; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+.aircraft-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.aircraft-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--panel-border); border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+.aircraft-card.selected { border-color: var(--accent); background: rgba(80, 180, 255, 0.18); }
+.aircraft-head { display: flex; gap: 10px; align-items: center; }
+.aircraft-head h4 { margin: 0; }
+.aircraft-sub { font-size: 0.75rem; color: var(--text-dim); }
+.aircraft-icon { width: 56px; height: 34px; flex: none; fill: var(--accent); }
+.aircraft-blurb { margin: 0; font-size: 0.85rem; }
+.link-btn { align-self: flex-start; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; font-size: 0.8rem; }
+.aircraft-specs { margin: 0; display: grid; gap: 2px; font-size: 0.78rem; }
+.aircraft-specs div { display: flex; justify-content: space-between; gap: 8px; }
+.aircraft-specs dt { color: var(--text-dim); }
+.aircraft-specs dd { margin: 0; text-align: right; }
+.aircraft-sources { margin: 0; font-size: 0.65rem; color: var(--text-dim); }
+.aircraft-card .btn { margin-top: auto; padding: 6px 12px; font-size: 0.9rem; }
+
+/* ---- Flight School ---- */
+.school-btn { font-size: 1.1rem; padding: 14px 18px; }
+.school-card { max-width: 1100px; margin: 0 auto 16px; padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; }
+.school-steps { margin: 0; padding-left: 22px; line-height: 1.6; }
+.school-steps b { color: var(--accent); }
+.school-notes { margin: 0; padding-left: 20px; color: var(--text-dim); font-size: 0.9rem; }
+.school-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.school-actions .btn.big { flex: 1 1 240px; font-size: 1.15rem; padding: 16px 20px; }
+.coach-tip { margin: 8px 0 12px; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--warning); background: rgba(255, 180, 84, 0.12); }
+.coach-tip-label { font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--warning); font-weight: 800; }
+.coach-tip p { margin: 4px 0 0; font-size: 1.1rem; font-weight: 600; }

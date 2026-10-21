@@ -94,6 +94,26 @@ describe('KeyboardControls', () => {
     expect(run(a, 0.2, 1 / 120).pitch).toBeCloseTo(run(b, 0.2, 1 / 60).pitch, 6)
   })
 
+  it('toggles the gear lever and speed brake per press and holds reverse', () => {
+    const kb = new KeyboardControls()
+    expect(kb.update(0).gear).toBe(1)
+    kb.keyDown('KeyG')
+    expect(kb.update(0).gear).toBe(0)
+    kb.keyDown('KeyG', true)
+    expect(kb.update(0).gear).toBe(0)
+    kb.keyUp('KeyG')
+    kb.keyDown('KeyG')
+    expect(kb.update(0).gear).toBe(1)
+    kb.keyDown('KeyV')
+    expect(kb.update(0).speedbrake).toBe(1)
+    kb.keyDown('KeyY')
+    expect(kb.update(0).reverse).toBe(1)
+    kb.keyUp('KeyY')
+    expect(kb.update(0).reverse).toBe(0)
+    kb.reset({ throttle: 0.5, flaps: 0, trim: 0, gear: 0, speedbrake: 0 })
+    expect(kb.update(0)).toMatchObject({ gear: 0, speedbrake: 0 })
+  })
+
   it('recognises flight keys and ignores others', () => {
     expect(KeyboardControls.isFlightKey('KeyW')).toBe(true)
     expect(KeyboardControls.isFlightKey('KeyC')).toBe(false)

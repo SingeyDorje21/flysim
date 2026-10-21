@@ -28,6 +28,9 @@ const KEYS = {
   brakes: ['KeyB', 'Space'],
   trimUp: ['Period'],
   trimDown: ['Comma'],
+  gear: ['KeyG'],
+  speedbrake: ['KeyV'],
+  reverse: ['KeyY'],
 } as const
 
 const FLIGHT_CODES: ReadonlySet<string> = new Set(Object.values(KEYS).flat())
@@ -53,6 +56,9 @@ export class KeyboardControls {
   private throttle = 0
   private flapIndex = 0
   private trim = 0
+  /** Gear lever: 1 = down. */
+  private gear = 1
+  private speedbrake = 0
 
   /** True for codes this controller uses (callers preventDefault on them). */
   static isFlightKey(code: string): boolean {
@@ -68,11 +74,30 @@ export class KeyboardControls {
       this.flapIndex = Math.min(FLAP_DETENTS.length - 1, this.flapIndex + 1)
     } else if ((KEYS.flapsUp as readonly string[]).includes(code)) {
       this.flapIndex = Math.max(0, this.flapIndex - 1)
+    } else if ((KEYS.gear as readonly string[]).includes(code)) {
+      // The physics refuses to retract on the ground; the lever still moves.
+      this.gear = this.gear > 0.5 ? 0 : 1
+    } else if ((KEYS.speedbrake as readonly string[]).includes(code)) {
+      this.speedbrake = this.speedbrake > 0.5 ? 0 : 1
     }
   }
 
   keyUp(code: string): void {
     this.pressed.delete(code)
+  }
+
+  /**
+   * Follow the gear lever the physics actually accepted: a gear-up command on
+   * the ground is refused, and must not come back as an automatic retraction
+   * at lift-off.
+   */
+  syncGear(accepted: number): void {
+    this.gear = accepted > 0.5 ? 1 : 0
+  }
+
+  /** Move the throttle lever (autothrust drives it in the landing lesson). */
+  setThrottle(value: number): void {
+    this.throttle = clamp(value, 0, 1)
   }
 
   isHeld(code: string): boolean {
@@ -85,13 +110,15 @@ export class KeyboardControls {
   }
 
   /** Put the levers where the spawn wants them and centre the stick. */
-  reset(initial: { throttle: number; flaps: number; trim: number }): void {
+  reset(initial: { throttle: number; flaps: number; trim: number; gear?: number; speedbrake?: number }): void {
     this.pressed.clear()
     this.pitch = 0
     this.roll = 0
     this.yaw = 0
     this.throttle = clamp(initial.throttle, 0, 1)
     this.trim = clamp(initial.trim, -1, 1)
+    this.gear = initial.gear === undefined ? 1 : initial.gear > 0.5 ? 1 : 0
+    this.speedbrake = initial.speedbrake === undefined ? 0 : initial.speedbrake > 0.5 ? 1 : 0
     let best = 0
     FLAP_DETENTS.forEach((d, i) => {
       if (Math.abs(d - initial.flaps) < Math.abs(FLAP_DETENTS[best] - initial.flaps)) best = i
@@ -116,6 +143,9 @@ export class KeyboardControls {
       flaps: FLAP_DETENTS[this.flapIndex],
       brakes: this.any(KEYS.brakes) ? 1 : 0,
       trim: this.trim,
+      gear: this.gear,
+      speedbrake: this.speedbrake,
+      reverse: this.any(KEYS.reverse) ? 1 : 0,
     }
   }
 

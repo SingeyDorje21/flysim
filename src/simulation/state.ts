@@ -7,10 +7,14 @@ export function createAircraftState(): AircraftState {
     velocity: { x: 0, y: 0, z: 0 },
     orientation: { x: 0, y: 0, z: 0, w: 1 },
     angularVelocity: { x: 0, y: 0, z: 0 },
-    controls: { pitch: 0, roll: 0, yaw: 0, throttle: 0, flaps: 0, brakes: 0, trim: 0 },
+    controls: { pitch: 0, roll: 0, yaw: 0, throttle: 0, flaps: 0, brakes: 0, trim: 0, gear: 1, speedbrake: 0, reverse: 0 },
     surfaces: { elevator: 0, aileron: 0, rudder: 0, flaps: 0 },
-    engine: { running: true, rpm: 0, spool: 0, thrust: 0 },
+    engine: { running: true, rpm: 0, spool: 0, thrust: 0, n1: 0, afterburner: false },
+    gearPosition: 1,
+    speedbrakePosition: 0,
+    thrustVector: 0,
     airspeed: 0,
+    mach: 0,
     groundSpeed: 0,
     altitude: 0,
     heightAboveGround: 0,
@@ -54,6 +58,9 @@ export function copyAircraftState(dst: AircraftState, src: AircraftState): void 
   c.flaps = sc.flaps
   c.brakes = sc.brakes
   c.trim = sc.trim
+  c.gear = sc.gear
+  c.speedbrake = sc.speedbrake
+  c.reverse = sc.reverse
   dst.surfaces.elevator = src.surfaces.elevator
   dst.surfaces.aileron = src.surfaces.aileron
   dst.surfaces.rudder = src.surfaces.rudder
@@ -62,7 +69,13 @@ export function copyAircraftState(dst: AircraftState, src: AircraftState): void 
   dst.engine.rpm = src.engine.rpm
   dst.engine.spool = src.engine.spool
   dst.engine.thrust = src.engine.thrust
+  dst.engine.n1 = src.engine.n1
+  dst.engine.afterburner = src.engine.afterburner
+  dst.gearPosition = src.gearPosition
+  dst.speedbrakePosition = src.speedbrakePosition
+  dst.thrustVector = src.thrustVector
   dst.airspeed = src.airspeed
+  dst.mach = src.mach
   dst.groundSpeed = src.groundSpeed
   dst.altitude = src.altitude
   dst.heightAboveGround = src.heightAboveGround

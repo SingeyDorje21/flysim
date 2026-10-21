@@ -4,7 +4,13 @@
  * rules here makes them testable without an AudioContext.
  */
 
+import type { EngineKind } from '../config/aircraftCatalog'
+
 export interface AudioFrame {
+  engineKind: EngineKind
+  /** Fan speed fraction (jets). */
+  n1: number
+  afterburner: boolean
   rpm: number
   spool: number
   engineRunning: boolean
@@ -23,6 +29,8 @@ export interface AudioFrame {
   teleportId: number
   /** Paused or on the results screen: everything goes quiet. */
   frozen: boolean
+  /** Flight School step counter (0 outside lessons); a change plays a chime. */
+  lessonStep: number
 }
 
 export interface SoundLevels {
@@ -35,6 +43,13 @@ export interface SoundLevels {
   windFreq: number
   rollGain: number
   hornOn: boolean
+  /** Jet turbine whine: pitch (Hz) and level. */
+  whineFreq: number
+  whineGain: number
+  /** Jet exhaust roar (low band-passed noise). */
+  roarGain: number
+  /** Afterburner rumble. */
+  afterburnerGain: number
 }
 
 export type SoundEvent =
@@ -43,18 +58,26 @@ export type SoundEvent =
   | { type: 'ring' }
   | { type: 'flaps' }
   | { type: 'throttle' }
+  | { type: 'step' }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 
 export function soundLevels(f: AudioFrame): SoundLevels {
   const alive = !f.crashed
   const engineOn = alive && f.engineRunning
+  const jet = f.engineKind !== 'piston'
+  const piston = engineOn && !jet
   // Four-cylinder four-stroke: two firing pulses per revolution.
   const engineFreq = Math.max(15, (f.rpm / 60) * 2)
   const wind = clamp01((f.airspeed - 12) / 55)
+  const n1 = clamp01(f.n1)
   return {
     engineFreq,
-    engineGain: engineOn ? 0.12 + 0.28 * clamp01(f.spool) : 0,
+    engineGain: piston ? 0.12 + 0.28 * clamp01(f.spool) : 0,
+    whineFreq: 400 + 2600 * n1,
+    whineGain: engineOn && jet ? 0.02 + 0.06 * n1 : 0,
+    roarGain: engineOn && jet ? 0.05 + 0.35 * n1 * n1 : 0,
+    afterburnerGain: engineOn && jet && f.afterburner ? 0.45 : 0,
     engineCutoff: 250 + 1800 * clamp01(f.spool) + f.rpm * 0.2,
     windGain: alive ? wind * wind * 0.4 : 0,
     windFreq: 300 + f.airspeed * 18,
@@ -87,6 +110,7 @@ export class SoundEventDetector {
           events.push({ type: 'touchdown', sink: Math.max(0, -prev.verticalSpeed), groundSpeed: f.groundSpeed })
         }
         if (f.ringsPassed > prev.ringsPassed) events.push({ type: 'ring' })
+        if (f.lessonStep > prev.lessonStep) events.push({ type: 'step' })
         if (f.flaps !== prev.flaps) events.push({ type: 'flaps' })
         // A detent click every 10% of throttle travel.
         const step = Math.round(f.throttle * 10)

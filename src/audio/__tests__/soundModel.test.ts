@@ -5,6 +5,9 @@ const DT = 1 / 60
 
 function frame(over: Partial<AudioFrame> = {}): AudioFrame {
   return {
+    engineKind: 'piston',
+    n1: 0.26,
+    afterburner: false,
     rpm: 700,
     spool: 0,
     engineRunning: true,
@@ -19,6 +22,7 @@ function frame(over: Partial<AudioFrame> = {}): AudioFrame {
     ringsPassed: 0,
     teleportId: 1,
     frozen: false,
+    lessonStep: 0,
     ...over,
   }
 }
@@ -37,6 +41,17 @@ describe('soundLevels', () => {
     expect(soundLevels(frame({ airspeed: 60, onGround: false })).windGain).toBeGreaterThan(0.2)
     expect(soundLevels(frame({ groundSpeed: 20 })).rollGain).toBeGreaterThan(0)
     expect(soundLevels(frame({ groundSpeed: 20, onGround: false })).rollGain).toBe(0)
+  })
+
+  it('jets use a turbine whine and roar instead of the piston drone, afterburner adds a rumble', () => {
+    const idle = soundLevels(frame({ engineKind: 'turbofan', n1: 0.25 }))
+    const full = soundLevels(frame({ engineKind: 'turbofan', n1: 1 }))
+    expect(idle.engineGain).toBe(0)
+    expect(full.whineFreq).toBeGreaterThan(idle.whineFreq)
+    expect(full.roarGain).toBeGreaterThan(idle.roarGain)
+    expect(full.afterburnerGain).toBe(0)
+    expect(soundLevels(frame({ engineKind: 'afterburningTurbofan', n1: 1, afterburner: true })).afterburnerGain).toBeGreaterThan(0)
+    expect(soundLevels(frame()).whineGain + soundLevels(frame()).roarGain).toBe(0)
   })
 
   it('sounds the stall horn only when airborne', () => {

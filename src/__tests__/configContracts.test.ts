@@ -34,7 +34,7 @@ describe('spawns', () => {
 
   it('onGround spawns sit on the runway, with runway heading, at rest', () => {
     const ground = modes.filter((m) => SPAWNS[m].onGround)
-    expect([...ground].sort()).toEqual(['freeFlight', 'takeoff'])
+    expect([...ground].sort()).toEqual(['freeFlight', 'lessonTakeoff', 'takeoff'])
     for (const mode of ground) {
       const sp = SPAWNS[mode]
       expect(isOnRunway(sp.position.x, sp.position.z), mode).toBe(true)
@@ -169,7 +169,16 @@ describe('quality profiles', () => {
   })
 
   it('load rises monotonically from low to high', () => {
-    const numeric = ['terrainSegments', 'cloudCount', 'treeCount', 'shadowMapSize', 'fogFar', 'maxDpr'] as const
+    const numeric = [
+      'terrainViewDistance',
+      'terrainLodBias',
+      'treeDensity',
+      'treeViewDistance',
+      'cloudCount',
+      'shadowMapSize',
+      'fogFar',
+      'maxDpr',
+    ] as const
     for (const key of numeric) {
       const [lo, mid, hi] = QUALITY_LEVELS.map((q) => QUALITY_PROFILES[q][key])
       expect(lo, key).toBeLessThan(mid)
@@ -183,7 +192,7 @@ describe('quality profiles', () => {
   it('values are positive and finite', () => {
     for (const q of QUALITY_LEVELS) {
       const p = QUALITY_PROFILES[q]
-      for (const v of [p.terrainSegments, p.cloudCount, p.treeCount, p.shadowMapSize, p.fogFar, p.maxDpr]) {
+      for (const v of [p.terrainViewDistance, p.treeDensity, p.cloudCount, p.shadowMapSize, p.fogFar, p.maxDpr]) {
         expect(v).toBeGreaterThan(0)
         expect(Number.isFinite(v)).toBe(true)
       }

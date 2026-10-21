@@ -10,10 +10,16 @@ export const WORLD = {
   /** Seed for every procedural generator. */
   seed: 1337,
   seaLevel: 0,
-  /** The playable island is roughly this radius around the origin (m). */
-  islandRadius: 7000,
-  /** Side length of the rendered terrain square (m). Ocean beyond. */
-  terrainSize: 16000,
+  /** The main island is roughly this radius around the origin (m). */
+  islandRadius: 38000,
+  /** Side length of the generated world square (m). Open ocean beyond. */
+  terrainSize: 100000,
+  /**
+   * Spacing (m) of the fixed triangulated grid the physics collides with.
+   * The nearest terrain level of detail is drawn on exactly this grid, so the
+   * ground you see near the aircraft is the ground you hit.
+   */
+  physicsGridStep: 30,
 } as const
 
 /**
@@ -55,7 +61,7 @@ export const DEPARTURE_CORRIDOR: Rect = { minX: -600, maxX: 600, minZ: -5000, ma
 /** Point at the runway-36 end where take-offs start. */
 const RUNWAY_START_Z = RUNWAY.thresholdZ - 60
 
-export const SPAWNS: Record<GameMode, SpawnState> = {
+const BASE_SPAWNS: Record<'freeFlight' | 'takeoff' | 'landing' | 'rings', SpawnState> = {
   freeFlight: {
     position: { x: 0, y: 0, z: RUNWAY_START_Z },
     headingDeg: 0,
@@ -91,6 +97,13 @@ export const SPAWNS: Record<GameMode, SpawnState> = {
     flaps: 0,
     onGround: false,
   },
+}
+
+/** Lessons start like the matching challenges (spawnFor moves them to the lesson airport). */
+export const SPAWNS: Record<GameMode, SpawnState> = {
+  ...BASE_SPAWNS,
+  lessonTakeoff: BASE_SPAWNS.takeoff,
+  lessonLanding: BASE_SPAWNS.landing,
 }
 
 export function isOnRunway(x: number, z: number, margin = 0): boolean {

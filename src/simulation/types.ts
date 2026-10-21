@@ -26,6 +26,8 @@
  *   Equivalent three.js Euler order 'YXZ': y = -heading, x = pitch, z = -bank.
  */
 
+import type { AircraftId } from '../config/aircraftCatalog'
+
 export interface Vec3 {
   x: number
   y: number
@@ -55,6 +57,12 @@ export interface ControlInputs {
   brakes: number
   /** Elevator trim -1..1. + = nose-up trim. */
   trim: number
+  /** Gear lever: 1 = down, 0 = up. Ignored by fixed-gear aircraft. */
+  gear: number
+  /** Speed brakes / spoilers 0..1. */
+  speedbrake: number
+  /** Reverse thrust 0..1 (jets on the ground only). */
+  reverse: number
 }
 
 /** Actual control-surface positions in radians after actuator dynamics. */
@@ -77,6 +85,10 @@ export interface EngineState {
   spool: number
   /** Current thrust in newtons along the body -Z axis. */
   thrust: number
+  /** Fan / propeller speed as a fraction of maximum (0..~1.05). */
+  n1: number
+  /** Afterburner lit (afterburning engines only). */
+  afterburner: boolean
 }
 
 export interface AircraftState {
@@ -97,8 +109,16 @@ export interface AircraftState {
   engine: EngineState
 
   // --- Derived each step (read-only for consumers) ---
+  /** Gear extension 0 (up) .. 1 (down and locked); always 1 for fixed gear. */
+  gearPosition: number
+  /** Speed brake / spoiler extension 0..1. */
+  speedbrakePosition: number
+  /** Pitch thrust-vector nozzle angle (rad), + = nozzle trailing edge up (nose-up moment). 0 when not fitted. */
+  thrustVector: number
   /** True airspeed (m/s). No wind model, so equal to |velocity|. */
   airspeed: number
+  /** Mach number (airspeed / local speed of sound). */
+  mach: number
   /** Horizontal speed over ground (m/s). */
   groundSpeed: number
   /** Altitude above sea level (m) = position.y. */
@@ -155,12 +175,16 @@ export interface SpawnState {
   onGround: boolean
   /** Default true. */
   engineRunning?: boolean
+  /** Airborne spawns only: start with the gear retracted. Default false. */
+  gearUp?: boolean
 }
 
 /**
  * The flight-dynamics contract. Implemented by AircraftPhysics in
  * src/simulation/AircraftPhysics.ts:
- *   new AircraftPhysics({ terrain, spawn, fixedDt?, config? })
+ *   new AircraftPhysics({ terrain, spawn, aircraft?: AircraftId (default 'trainer'), fixedDt?, config? })
+ * Spawns may carry gear: airborne spawns start with the gear down unless
+ * SpawnState.gearUp is set.
  */
 export interface FlightModel {
   /** State after the last fixed step. Treat as read-only. */
@@ -188,6 +212,15 @@ export interface AircraftRenderState {
   velocity: Vec3
   surfaces: ControlSurfaces
   engineRpm: number
+  /** Which model to draw (constant during a flight). */
+  aircraftId: AircraftId
+  /** Fan speed fraction, for jet exhaust / spool effects. */
+  n1: number
+  afterburner: boolean
+  gearPosition: number
+  speedbrakePosition: number
+  /** Thrust-vector nozzle angle (rad), see AircraftState.thrustVector. */
+  thrustVector: number
   airspeed: number
   onGround: boolean
   crashed: boolean

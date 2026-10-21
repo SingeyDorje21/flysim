@@ -1,6 +1,6 @@
 import { GAME_MODES } from '../game/modes'
 import { useGameStore } from '../state/gameStore'
-import { FLIGHT_BINDINGS, VIEW_BINDINGS, type Binding } from './controlsData'
+import { AFTERBURNER_NOTE, FLIGHT_BINDINGS, VIEW_BINDINGS, type Binding } from './controlsData'
 
 function BindingTable({ caption, rows }: { caption: string; rows: readonly Binding[] }) {
   return (
@@ -30,6 +30,16 @@ export function HowItWorks() {
         <h2 tabIndex={-1} autoFocus>
           How it works
         </h2>
+
+        <section className="guide-section">
+          <h3>Flight School</h3>
+          <p>
+            New pilots: start in <strong>Flight School</strong> on the main menu. Pick your aircraft and take a
+            guided Take-off or Landing Lesson. A coach panel tells you what to do next, which keys to press and
+            shows a gauge with the target band for speed, pitch or height. Assists and voice callouts are on by
+            default; you can switch them off in Settings.
+          </p>
+        </section>
 
         <section className="guide-section">
           <h3>Your first flight</h3>
@@ -102,10 +112,18 @@ export function HowItWorks() {
               bank.
             </li>
             <li>
-              <strong>Engine box:</strong> throttle, rpm, flaps, brakes and trim.
+              <strong>Engine box:</strong> throttle, rpm (N1 % on jets), Mach, gear, flaps, brakes, trim, and SPD BRK, REV and AB flags.
             </li>
             <li>
               <strong>Top:</strong> heading tape and your current objective with its progress.
+            </li>
+            <li>
+              <strong>Top right:</strong> a minimap of nearby airports and the nearest airport's distance and
+              bearing. Press <kbd>M</kbd> for the full island map.
+            </li>
+            <li>
+              <strong>Approach guidance:</strong> when you line up with a runway, two scales show how far you are
+              from the centreline (horizontal) and the 3 degree glide path (vertical). Keep both diamonds centred.
             </li>
             <li>
               <strong>Bottom left:</strong> the key commands.
@@ -121,13 +139,40 @@ export function HowItWorks() {
           <h3>Controls</h3>
           <BindingTable caption="Flying" rows={FLIGHT_BINDINGS} />
           <BindingTable caption="View and game" rows={VIEW_BINDINGS} />
+          <p className="note">{AFTERBURNER_NOTE}</p>
           <p className="note">In free camera mode, drag with the mouse to look around and scroll to zoom.</p>
+        </section>
+
+        <section className="guide-section">
+          <h3>Aircraft</h3>
+          <ul>
+            <li>
+              <strong>FS-1 Trainer:</strong> light, forgiving and fixed gear. The best place to learn the basics.
+            </li>
+            <li>
+              <strong>F-22 Raptor:</strong> very agile, with huge thrust. It reaches supersonic speed, and the
+              afterburner lights at full throttle. Lower the gear (<kbd>G</kbd>) before landing.
+            </li>
+            <li>
+              <strong>A220-300 and A350-900:</strong> fly-by-wire airliners that hold their attitude when you let go
+              of the stick. Make small, early inputs. The A350 is heavy and needs a long runway.
+            </li>
+            <li>
+              <strong>Global 8000:</strong> a fast business jet. It is quick to build speed and needs a medium-length
+              runway.
+            </li>
+            <li>
+              <strong>Heavy jets</strong> need long runways and slow, early inputs. Use <kbd>V</kbd> for the speed
+              brake and hold <kbd>Y</kbd> for reverse thrust after touchdown. Runways marked with a warning in the
+              airport list are shorter than the aircraft needs.
+            </li>
+          </ul>
         </section>
 
         <section className="guide-section">
           <h3>Game modes</h3>
           <ul>
-            {GAME_MODES.map((m) => (
+            {GAME_MODES.filter((m) => m.kind === 'challenge').map((m) => (
               <li key={m.id}>
                 <strong>{m.name}:</strong> {m.tagline}.
               </li>

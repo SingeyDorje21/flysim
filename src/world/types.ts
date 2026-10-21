@@ -18,4 +18,10 @@ export interface FlightWorldProps {
   rings: RingCourseView | null
   /** Free-look mouse sensitivity multiplier (settings). */
   mouseSensitivity: number
+  /** Sun position and sky/fog/water colours. */
+  timeOfDay: TimeOfDay
 }
+
+export type TimeOfDay = 'morning' | 'noon' | 'evening'
+
+export const TIMES_OF_DAY: readonly TimeOfDay[] = ['morning', 'noon', 'evening']

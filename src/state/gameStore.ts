@@ -7,12 +7,16 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { QUALITY_LEVELS, type Quality } from '../config/quality'
+import { AIRCRAFT_IDS, type AircraftId } from '../config/aircraftCatalog'
+import { HOME_AIRPORT_ID, getAirport } from '../config/airports'
+import { runwayEnds } from '../game/airportGeometry'
 import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES, type CameraMode, type FlightResult, type GameMode } from '../game/types'
+import { TIMES_OF_DAY, type TimeOfDay } from '../world/types'
 
-export type Screen = 'mainMenu' | 'modeSelect' | 'flight' | 'results'
+export type Screen = 'mainMenu' | 'modeSelect' | 'flightSchool' | 'flight' | 'results'
 /** Modal panels that can sit on top of any screen. */
-export type Overlay = 'none' | 'settings' | 'controls' | 'howItWorks'
+export type Overlay = 'none' | 'settings' | 'controls' | 'howItWorks' | 'map'
 /** imperial = knots, feet, ft/min. metric = km/h, metres, m/s. */
 export type Units = 'imperial' | 'metric'
 
@@ -30,6 +34,11 @@ export interface Settings {
   mouseSensitivity: number
   /** Sound effects volume 0..1 (0 = muted). */
   masterVolume: number
+  timeOfDay: TimeOfDay
+  /** Flight assists (tail-strike guard on the take-off roll). Always on in Flight School. */
+  assists: boolean
+  /** Spoken cockpit callouts ("Rotate", "50, 40, 30...", "Retard"). */
+  voiceCallouts: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +50,9 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultCamera: 'chase',
   mouseSensitivity: 1,
   masterVolume: 0.6,
+  timeOfDay: 'noon',
+  assists: true,
+  voiceCallouts: true,
 }
 
 export interface GameState {
@@ -57,9 +69,21 @@ export interface GameState {
   newBest: boolean
   bestScores: Partial<Record<GameMode, number>>
   settings: Settings
+  /** Airport where Free Flight and Take-off start and the Landing Challenge ends. */
+  airportId: string
+  /** Runway end designator at that airport, e.g. "36" or "09". */
+  runwayEnd: string
+  /** Aircraft to fly (persisted). */
+  aircraftId: AircraftId
+
+  selectAircraft(aircraftId: AircraftId): void
+
+  /** Choose the airport (and optionally the runway end; defaults to its lower-numbered end). */
+  selectAirport(airportId: string, runwayEnd?: string): void
 
   goToMainMenu(): void
   goToModeSelect(): void
+  goToFlightSchool(): void
   openOverlay(overlay: Exclude<Overlay, 'none'>): void
   closeOverlay(): void
   startFlight(mode: GameMode): void
@@ -110,7 +134,7 @@ const safeStorage: StateStorage = {
   },
 }
 
-type PersistedSlice = Pick<GameState, 'settings' | 'bestScores'>
+type PersistedSlice = Pick<GameState, 'settings' | 'bestScores' | 'aircraftId'>
 
 const UNITS: readonly Units[] = ['imperial', 'metric']
 
@@ -139,6 +163,9 @@ export function sanitizeSettings(raw: unknown): Settings {
     mouseSensitivity:
       typeof sens === 'number' && Number.isFinite(sens) ? Math.min(3, Math.max(0.2, sens)) : d.mouseSensitivity,
     masterVolume: typeof vol === 'number' && Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : d.masterVolume,
+    timeOfDay: oneOf(r.timeOfDay, TIMES_OF_DAY, d.timeOfDay),
+    assists: bool(r.assists, d.assists),
+    voiceCallouts: bool(r.voiceCallouts, d.voiceCallouts),
   }
 }
 
@@ -166,10 +193,23 @@ export const useGameStore = create<GameState>()(
       newBest: false,
       bestScores: {},
       settings: DEFAULT_SETTINGS,
+      airportId: HOME_AIRPORT_ID,
+      runwayEnd: runwayEnds(getAirport(HOME_AIRPORT_ID))[0].designator,
+
+      aircraftId: 'trainer',
+      selectAircraft: (aircraftId) => set({ aircraftId }),
+
+      selectAirport: (airportId, runwayEnd) => {
+        const ends = runwayEnds(getAirport(airportId))
+        const end = ends.find((e) => e.designator === runwayEnd) ?? ends[0]
+        set({ airportId, runwayEnd: end.designator })
+      },
 
       goToMainMenu: () => set({ screen: 'mainMenu', overlay: 'none', paused: false, result: null, newBest: false }),
       goToModeSelect: () =>
         set({ screen: 'modeSelect', overlay: 'none', paused: false, result: null, newBest: false }),
+      goToFlightSchool: () =>
+        set({ screen: 'flightSchool', overlay: 'none', paused: false, result: null, newBest: false }),
       openOverlay: (overlay) => set({ overlay }),
       closeOverlay: () => set({ overlay: 'none' }),
 
@@ -235,7 +275,7 @@ export const useGameStore = create<GameState>()(
     {
       name: 'flysim-v1',
       storage: createJSONStorage(() => safeStorage),
-      partialize: (s): PersistedSlice => ({ settings: s.settings, bestScores: s.bestScores }),
+      partialize: (s): PersistedSlice => ({ settings: s.settings, bestScores: s.bestScores, aircraftId: s.aircraftId }),
       // Validate field by field: settings added later get their defaults and
       // corrupt values never reach the renderer.
       merge: (persisted, current) => {
@@ -244,6 +284,7 @@ export const useGameStore = create<GameState>()(
         return {
           ...current,
           bestScores: sanitizeBestScores(p.bestScores),
+          aircraftId: oneOf(p.aircraftId, AIRCRAFT_IDS, current.aircraftId),
           settings,
           cameraMode: settings.defaultCamera,
         }

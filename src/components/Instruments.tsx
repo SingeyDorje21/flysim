@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { getAircraft, type AircraftSpeeds } from '../config/aircraftCatalog'
 import { useGameStore, type Units } from '../state/gameStore'
 import { useTelemetry } from '../state/telemetry'
 import {
@@ -33,9 +34,11 @@ interface GaugeProps {
   label: string
   value: string
   children: ReactNode
+  /** Full-scale value, exposed for tests and assistive tech. */
+  scaleMax?: number
 }
 
-function Gauge({ label, value, children }: GaugeProps) {
+function Gauge({ label, value, children, scaleMax }: GaugeProps) {
   return (
     <svg
       className="gauge"
@@ -43,6 +46,7 @@ function Gauge({ label, value, children }: GaugeProps) {
       role="img"
       aria-label={`${label} ${value}`}
       data-testid={`gauge-${label.toLowerCase().replace(/\s+/g, '-')}`}
+      data-scale-max={scaleMax}
     >
       <circle cx={C} cy={C} r={97} className="gauge-bezel" />
       <circle cx={C} cy={C} r={90} className="gauge-face" />
@@ -89,27 +93,37 @@ function Needle({ deg, length = 74, className = 'needle' }: { deg: number; lengt
   return <line x1={bx} y1={by} x2={x} y2={y} className={className} />
 }
 
-function Airspeed({ ms, units }: { ms: number; units: Units }) {
+/** Full-scale airspeed (display units) for an aircraft: fighters get a round 800 kt style scale. */
+function airspeedScaleMax(speeds: AircraftSpeeds, units: Units): number {
+  const maxOp = speedValue(speeds.maxOperating, units)
+  if (maxOp > 400) return Math.ceil(maxOp / 100) * 100
+  const step = units === 'imperial' ? 20 : 40
+  return Math.ceil((maxOp * 1.15) / step) * step
+}
+
+function Airspeed({ ms, units, speeds }: { ms: number; units: Units; speeds: AircraftSpeeds }) {
   const imperial = units === 'imperial'
-  const max = imperial ? 160 : 300
+  const max = airspeedScaleMax(speeds, units)
+  const major = imperial ? (max <= 200 ? 20 : max <= 450 ? 50 : 100) : max <= 400 ? 40 : max <= 1000 ? 100 : 200
   const a = (v: number) => -140 + (clamp(speedValue(v, units), 0, max) / max) * 280
   const shown = speedValue(ms, units)
-  const [rx1, ry1] = polar(90, a(70))
-  const [rx2, ry2] = polar(70, a(70))
+  const [rx1, ry1] = polar(90, a(speeds.maxOperating))
+  const [rx2, ry2] = polar(70, a(speeds.maxOperating))
+  const caution = speeds.stallClean + (speeds.maxOperating - speeds.stallClean) * 0.82
   return (
-    <Gauge label="Airspeed" value={`${Math.round(shown)} ${speedUnit(units)}`}>
-      <path d={arcPath(84, a(24), a(44))} className="arc arc-white" />
-      <path d={arcPath(79, a(30), a(55))} className="arc arc-green" />
-      <path d={arcPath(79, a(55), a(70))} className="arc arc-yellow" />
+    <Gauge label="Airspeed" value={`${Math.round(shown)} ${speedUnit(units)}`} scaleMax={max}>
+      <path d={arcPath(84, a(speeds.stallClean * 0.85), a(speeds.approach * 1.2))} className="arc arc-white" />
+      <path d={arcPath(79, a(speeds.stallClean), a(caution))} className="arc arc-green" />
+      <path d={arcPath(79, a(caution), a(speeds.maxOperating))} className="arc arc-yellow" />
       <line x1={rx1} y1={ry1} x2={rx2} y2={ry2} className="redline" />
       <Ticks
         min={0}
         max={max}
         startDeg={-140}
         endDeg={140}
-        major={imperial ? 20 : 40}
-        minor={imperial ? 10 : 20}
-        labelFormat={(v) => (imperial || v % 80 === 0 ? String(v) : '')}
+        major={major}
+        minor={major / 2}
+        labelFormat={(v) => (imperial || major !== 40 || v % 80 === 0 ? String(v) : '')}
       />
       <text x={C} y={140} className="gauge-title" textAnchor="middle">
         {speedUnit(units).toUpperCase()}
@@ -288,16 +302,36 @@ function Tach({ rpm }: { rpm: number }) {
   )
 }
 
+function N1Gauge({ n1 }: { n1: number }) {
+  const max = 110
+  const pct = clamp(fin(n1) * 100, 0, max)
+  const a = (v: number) => -135 + (v / max) * 270
+  return (
+    <Gauge label="N1" value={`${Math.round(fin(n1) * 100)} percent`} scaleMax={max}>
+      <path d={arcPath(79, a(20), a(100))} className="arc arc-green" />
+      <path d={arcPath(79, a(100), a(105))} className="arc arc-yellow" />
+      <path d={arcPath(79, a(105), a(110))} className="arc arc-red" />
+      <Ticks min={0} max={max} startDeg={-135} endDeg={(max / max) * 135} major={20} minor={10} />
+      <text x={C} y={140} className="gauge-title" textAnchor="middle">
+        N1 %
+      </text>
+      <Needle deg={a(pct)} />
+      <circle cx={C} cy={C} r={5} className="hub" />
+    </Gauge>
+  )
+}
+
 /** Six-pack instrument panel. Reads live telemetry; never intercepts the pointer. */
 export function InstrumentPanel() {
   const t = useTelemetry()
   const units = useGameStore((s) => s.settings.units)
+  const aircraft = getAircraft(t.aircraftId)
   return (
     <div className="instrument-panel" data-testid="instrument-panel">
-      <Airspeed ms={t.airspeed} units={units} />
+      <Airspeed ms={t.airspeed} units={units} speeds={aircraft.speeds} />
       <Attitude pitch={t.pitchDeg} bank={t.bankDeg} />
       <Altimeter m={t.altitude} units={units} />
-      <Tach rpm={t.rpm} />
+      {aircraft.engineKind === 'piston' ? <Tach rpm={t.rpm} /> : <N1Gauge n1={t.n1} />}
       <Heading deg={t.headingDeg} />
       <Vsi ms={t.verticalSpeed} units={units} />
     </div>

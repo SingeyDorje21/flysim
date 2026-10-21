@@ -1,79 +1,84 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import {
-  AdditiveBlending,
-  BackSide,
-  BufferAttribute,
-  Color,
-  Group,
-  MeshBasicMaterial,
-  SphereGeometry,
-} from 'three'
-import { HORIZON_COLOR, SKY_RADIUS, SUN_DIR, ZENITH_COLOR } from './constants'
+import { BackSide, Mesh, ShaderMaterial, SphereGeometry } from 'three'
+import type { TimeOfDay } from '../types'
+import { displayColor, environmentFor, SKY_RADIUS } from './constants'
+
+const VERTEX = /* glsl */ `
+varying vec3 vDir;
+void main() {
+  vDir = position;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`
+
+// Writes final display values (no tone mapping), so the horizon equals the fog colour exactly.
+const FRAGMENT = /* glsl */ `
+uniform vec3 uHorizon;
+uniform vec3 uZenith;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+varying vec3 vDir;
+void main() {
+  vec3 d = normalize(vDir);
+  float up = max(d.y, 0.0);
+  vec3 col = mix(uHorizon, uZenith, pow(up, 0.55));
+  col = mix(col, uHorizon * 0.9, clamp(-d.y * 3.0, 0.0, 1.0));
+
+  float s = max(dot(d, uSunDir), 0.0);
+  float lowSun = 1.0 - clamp(uSunDir.y, 0.0, 1.0);
+  // Wide warm glow hugging the horizon, tighter halo, then the disc.
+  col += uSunColor * pow(s, 5.0) * exp(-abs(d.y) * 5.0) * (0.25 + 0.5 * lowSun);
+  col += uSunColor * pow(s, 28.0) * 0.30;
+  col += uSunColor * pow(s, 500.0) * 0.55;
+  float disc = smoothstep(0.99935, 0.99965, s) * smoothstep(-0.03, 0.02, d.y);
+  col = mix(col, vec3(1.0, 0.98, 0.92), disc);
+  gl_FragColor = vec4(col, 1.0);
+}
+`
 
 /**
- * Gradient sky dome plus sun disc and glow. Drawn first with depth test off,
- * and re-centred on the camera every frame (place after the camera rig).
+ * Gradient sky dome with a sun disc and glow, tinted per time of day. It is
+ * re-centred on the camera every frame (place it after the camera rig), so a
+ * 60 km camera far plane never clips it.
  */
-export function Sky() {
-  const ref = useRef<Group>(null)
+export function Sky({ timeOfDay }: { timeOfDay: TimeOfDay }) {
+  const ref = useRef<Mesh>(null)
   const camera = useThree((s) => s.camera)
 
   const resources = useMemo(() => {
-    const dome = new SphereGeometry(SKY_RADIUS, 32, 20)
-    const pos = dome.getAttribute('position')
-    const colors = new Float32Array(pos.count * 3)
-    const horizon = new Color(HORIZON_COLOR)
-    const zenith = new Color(ZENITH_COLOR)
-    const below = new Color(HORIZON_COLOR).multiplyScalar(0.92)
-    const c = new Color()
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i) / SKY_RADIUS
-      if (y >= 0) {
-        // Stay pale near the horizon, deepen towards the zenith.
-        c.copy(horizon).lerp(zenith, Math.pow(y, 0.55))
-      } else {
-        c.copy(horizon).lerp(below, Math.min(1, -y * 3))
-      }
-      colors[i * 3] = c.r
-      colors[i * 3 + 1] = c.g
-      colors[i * 3 + 2] = c.b
-    }
-    dome.setAttribute('color', new BufferAttribute(colors, 3))
-    const domeMat = new MeshBasicMaterial({
-      vertexColors: true,
+    const geometry = new SphereGeometry(SKY_RADIUS, 32, 20)
+    const look = environmentFor('noon')
+    const material = new ShaderMaterial({
+      uniforms: {
+        uHorizon: { value: displayColor(look.horizonColor) },
+        uZenith: { value: displayColor(look.zenithColor) },
+        uSunDir: { value: look.sunDirection.clone() },
+        uSunColor: { value: displayColor(look.sunColor) },
+      },
+      vertexShader: VERTEX,
+      fragmentShader: FRAGMENT,
       side: BackSide,
       depthTest: false,
       depthWrite: false,
       fog: false,
-      toneMapped: false,
     })
-
-    const sunGeo = new SphereGeometry(SKY_RADIUS * 0.028, 20, 12)
-    const sunMat = new MeshBasicMaterial({ color: 0xfff6dc, fog: false, depthTest: false, depthWrite: false, toneMapped: false })
-    const glowGeo = new SphereGeometry(SKY_RADIUS * 0.12, 20, 12)
-    // Additive blending with transparent=false keeps the glow in the opaque
-    // render list, so it is drawn before (and covered by) the terrain.
-    const glowMat = new MeshBasicMaterial({
-      color: 0xffe9b0,
-      fog: false,
-      depthTest: false,
-      depthWrite: false,
-      toneMapped: false,
-      blending: AdditiveBlending,
-      opacity: 0.18,
-    })
-    return { dome, domeMat, sunGeo, sunMat, glowGeo, glowMat }
+    return { geometry, material }
   }, [])
+
+  useEffect(() => {
+    const look = environmentFor(timeOfDay)
+    const u = resources.material.uniforms
+    u.uHorizon.value.copy(displayColor(look.horizonColor))
+    u.uZenith.value.copy(displayColor(look.zenithColor))
+    u.uSunDir.value.copy(look.sunDirection)
+    u.uSunColor.value.copy(displayColor(look.sunColor))
+  }, [resources, timeOfDay])
 
   useEffect(
     () => () => {
-      resources.dome.dispose()
-      resources.domeMat.dispose()
-      resources.sunGeo.dispose()
-      resources.sunMat.dispose()
-      resources.glowGeo.dispose()
-      resources.glowMat.dispose()
+      resources.geometry.dispose()
+      resources.material.dispose()
     },
     [resources],
   )
@@ -82,12 +87,5 @@ export function Sky() {
     if (ref.current) ref.current.position.copy(camera.position)
   })
 
-  const sunPos = SUN_DIR.clone().multiplyScalar(SKY_RADIUS * 0.9)
-  return (
-    <group ref={ref}>
-      <mesh geometry={resources.dome} material={resources.domeMat} renderOrder={-1000} frustumCulled={false} />
-      <mesh geometry={resources.glowGeo} material={resources.glowMat} position={sunPos} renderOrder={-999} frustumCulled={false} />
-      <mesh geometry={resources.sunGeo} material={resources.sunMat} position={sunPos} renderOrder={-998} frustumCulled={false} />
-    </group>
-  )
+  return <mesh ref={ref} geometry={resources.geometry} material={resources.material} renderOrder={-1000} frustumCulled={false} />
 }

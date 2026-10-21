@@ -1,19 +1,27 @@
 import { useId, useState, type ReactNode } from 'react'
 import { QUALITY_LEVELS } from '../config/quality'
 import { GAME_MODES } from '../game/modes'
-import { CAMERA_MODES } from '../game/types'
+import { CAMERA_MODES, LESSON_MODES } from '../game/types'
 import { useGameStore, type Units } from '../state/gameStore'
-import { ALL_BINDINGS } from './controlsData'
+import { TIMES_OF_DAY } from '../world/types'
+import { AirportPicker, SelectionSummary } from './AirportPicker'
+import { AFTERBURNER_NOTE, ALL_BINDINGS } from './controlsData'
 import { formatStat, formatTime } from './format'
+import { FlightSchool } from './FlightSchool'
+import { Hangar } from './Hangar'
 import { HowItWorks } from './HowItWorks'
 import { Hud } from './Hud'
 import { InstrumentPanel } from './Instruments'
+import { WorldMap } from './WorldMap'
 import './GameUI.css'
+
+const AIRPORT_MODES: ReadonlySet<string> = new Set(['freeFlight', 'takeoff', 'landing'])
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 
 function MainMenu() {
   const goToModeSelect = useGameStore((s) => s.goToModeSelect)
+  const goToFlightSchool = useGameStore((s) => s.goToFlightSchool)
   const startFlight = useGameStore((s) => s.startFlight)
   const openOverlay = useGameStore((s) => s.openOverlay)
   return (
@@ -24,6 +32,9 @@ function MainMenu() {
         <div className="menu-buttons">
           <button type="button" className="btn primary" onClick={goToModeSelect}>
             Fly
+          </button>
+          <button type="button" className="btn primary school-btn" onClick={goToFlightSchool}>
+            Flight School
           </button>
           <button type="button" className="btn" onClick={() => startFlight('freeFlight')}>
             Quick Flight
@@ -55,8 +66,10 @@ function ModeSelect() {
           Back
         </button>
       </div>
+      <Hangar />
+      <AirportPicker />
       <div className="mode-grid">
-        {GAME_MODES.map((m) => {
+        {GAME_MODES.filter((m) => m.kind === 'challenge').map((m) => {
           const best = bestScores[m.id]
           return (
             <article key={m.id} className="panel mode-card" aria-label={m.name}>
@@ -68,6 +81,9 @@ function ModeSelect() {
                   <li key={o}>{o}</li>
                 ))}
               </ul>
+              {AIRPORT_MODES.has(m.id) && (
+                <SelectionSummary label={m.id === 'landing' ? 'Destination' : 'Airport'} />
+              )}
               <dl className="mode-meta">
                 <div>
                   <dt>Time limit</dt>
@@ -135,15 +151,25 @@ function Results() {
   const units = useGameStore((s) => s.settings.units)
   const restartFlight = useGameStore((s) => s.restartFlight)
   const goToModeSelect = useGameStore((s) => s.goToModeSelect)
+  const goToFlightSchool = useGameStore((s) => s.goToFlightSchool)
   const quitToMenu = useGameStore((s) => s.quitToMenu)
   if (!result) return null
   const best = bestScores[result.mode]
+  const isLesson = LESSON_MODES.includes(result.mode)
   return (
     <div className="screen screen-center scrim">
       <div className={`panel results-panel outcome-${result.outcome}`}>
         <div className="outcome-tag">{result.outcome === 'success' ? 'Success' : 'Failed'}</div>
         <h2>{result.headline}</h2>
-        {result.reason && <p className="reason">{result.reason}</p>}
+        {result.reason &&
+          (isLesson ? (
+            <div className="coach-tip" data-testid="coach-tip">
+              <div className="coach-tip-label">Coach&apos;s tip</div>
+              <p>{result.reason}</p>
+            </div>
+          ) : (
+            <p className="reason">{result.reason}</p>
+          ))}
         <div className="score-row">
           <div className="score">
             <span className="score-label">Score</span>
@@ -175,11 +201,17 @@ function Results() {
         </dl>
         <div className="menu-buttons row">
           <button type="button" className="btn primary" autoFocus onClick={restartFlight}>
-            Retry
+            {isLesson ? 'Try again' : 'Retry'}
           </button>
-          <button type="button" className="btn" onClick={goToModeSelect}>
-            Choose Mode
-          </button>
+          {isLesson ? (
+            <button type="button" className="btn" onClick={goToFlightSchool}>
+              Flight School
+            </button>
+          ) : (
+            <button type="button" className="btn" onClick={goToModeSelect}>
+              Choose Mode
+            </button>
+          )}
           <button type="button" className="btn" onClick={quitToMenu}>
             Main Menu
           </button>
@@ -254,6 +286,14 @@ function SettingsPanel() {
             onChange={(units) => updateSettings({ units })}
           />
         </Field>
+        <Field label="Time of day">
+          <Segmented
+            label="Time of day"
+            value={settings.timeOfDay}
+            options={TIMES_OF_DAY}
+            onChange={(timeOfDay) => updateSettings({ timeOfDay })}
+          />
+        </Field>
         <Field label="Default camera">
           <Segmented
             label="Default camera"
@@ -262,6 +302,22 @@ function SettingsPanel() {
             onChange={(defaultCamera) => updateSettings({ defaultCamera })}
           />
         </Field>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={settings.assists}
+            onChange={(e) => updateSettings({ assists: e.target.checked })}
+          />
+          Flight assists (tail-strike guard)
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={settings.voiceCallouts}
+            onChange={(e) => updateSettings({ voiceCallouts: e.target.checked })}
+          />
+          Voice callouts
+        </label>
         <label className="check">
           <input
             type="checkbox"
@@ -374,6 +430,7 @@ function ControlsPanel() {
           </tbody>
         </table>
         <p className="note">Hold the mouse button and drag to look around in free camera mode.</p>
+        <p className="note">{AFTERBURNER_NOTE}</p>
         <div className="menu-buttons row">
           <button type="button" className="btn primary" autoFocus onClick={closeOverlay}>
             Close
@@ -396,6 +453,7 @@ export function GameUI() {
     <div className="game-ui">
       {screen === 'mainMenu' && <MainMenu />}
       {screen === 'modeSelect' && <ModeSelect />}
+      {screen === 'flightSchool' && <FlightSchool />}
       {screen === 'flight' && (
         <>
           {showHud && <Hud />}
@@ -407,6 +465,7 @@ export function GameUI() {
       {overlay === 'settings' && <SettingsPanel />}
       {overlay === 'controls' && <ControlsPanel />}
       {overlay === 'howItWorks' && <HowItWorks />}
+      {overlay === 'map' && <WorldMap />}
     </div>
   )
 }
