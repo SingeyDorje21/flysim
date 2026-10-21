@@ -115,8 +115,9 @@
 
 .hud-box {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  /* Anchored below the heading tape and challenge panel, not centred, so the
+     right box never runs into the engine box on short viewports. */
+  top: 140px;
   min-width: 130px;
   padding: 8px 12px;
   background: rgba(8, 14, 24, 0.5);
@@ -126,7 +127,7 @@
 }
 .hud-left { left: 12px; }
 .hud-right { right: 12px; }
-.hud-engine { right: 12px; top: auto; bottom: 12px; transform: none; }
+.hud-engine { right: 12px; top: auto; bottom: 12px; }
 .with-instruments .hud-engine { bottom: 190px; }
 .hud-label { font-size: 0.65rem; letter-spacing: 0.12em; opacity: 0.7; }
 .hud-big { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
@@ -147,6 +148,10 @@
   opacity: 0.85;
 }
 .with-instruments .hud-hint { bottom: 190px; }
+
+@media (max-height: 560px) {
+  .hud-engine { display: none; }
+}
 
 @media (max-width: 720px) {
   .hud-box { min-width: 100px; font-size: 0.7rem; padding: 6px 8px; }
