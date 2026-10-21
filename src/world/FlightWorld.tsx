@@ -1,6 +1,6 @@
 import { QUALITY_PROFILES } from '../config/quality'
 import { AircraftModel } from './aircraft/AircraftModel'
-import { Airport } from './airport/Airport'
+import { Airports } from './airport/Airports'
 import { CameraRig } from './camera/CameraRig'
 import { Clouds } from './environment/Clouds'
 import { environmentFor } from './environment/constants'
@@ -46,7 +46,7 @@ function WorldContent({
 
       <TerrainSystem terrain={terrain} profile={profile} />
       <Water profile={profile} timeOfDay={timeOfDay} />
-      <Airport shadows={profile.shadows} />
+      <Airports shadows={profile.shadows} />
       <Clouds profile={profile} timeOfDay={timeOfDay} />
       {rings && <Rings course={rings} />}
       <AircraftModel renderState={renderState} cameraMode={cameraMode} shadows={profile.shadows} />
