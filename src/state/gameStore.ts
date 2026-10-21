@@ -7,13 +7,15 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { QUALITY_LEVELS, type Quality } from '../config/quality'
+import { HOME_AIRPORT_ID, getAirport } from '../config/airports'
+import { runwayEnds } from '../game/airportGeometry'
 import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES, type CameraMode, type FlightResult, type GameMode } from '../game/types'
 import { TIMES_OF_DAY, type TimeOfDay } from '../world/types'
 
 export type Screen = 'mainMenu' | 'modeSelect' | 'flight' | 'results'
 /** Modal panels that can sit on top of any screen. */
-export type Overlay = 'none' | 'settings' | 'controls' | 'howItWorks'
+export type Overlay = 'none' | 'settings' | 'controls' | 'howItWorks' | 'map'
 /** imperial = knots, feet, ft/min. metric = km/h, metres, m/s. */
 export type Units = 'imperial' | 'metric'
 
@@ -60,6 +62,13 @@ export interface GameState {
   newBest: boolean
   bestScores: Partial<Record<GameMode, number>>
   settings: Settings
+  /** Airport where Free Flight and Take-off start and the Landing Challenge ends. */
+  airportId: string
+  /** Runway end designator at that airport, e.g. "36" or "09". */
+  runwayEnd: string
+
+  /** Choose the airport (and optionally the runway end; defaults to its lower-numbered end). */
+  selectAirport(airportId: string, runwayEnd?: string): void
 
   goToMainMenu(): void
   goToModeSelect(): void
@@ -170,6 +179,14 @@ export const useGameStore = create<GameState>()(
       newBest: false,
       bestScores: {},
       settings: DEFAULT_SETTINGS,
+      airportId: HOME_AIRPORT_ID,
+      runwayEnd: runwayEnds(getAirport(HOME_AIRPORT_ID))[0].designator,
+
+      selectAirport: (airportId, runwayEnd) => {
+        const ends = runwayEnds(getAirport(airportId))
+        const end = ends.find((e) => e.designator === runwayEnd) ?? ends[0]
+        set({ airportId, runwayEnd: end.designator })
+      },
 
       goToMainMenu: () => set({ screen: 'mainMenu', overlay: 'none', paused: false, result: null, newBest: false }),
       goToModeSelect: () =>

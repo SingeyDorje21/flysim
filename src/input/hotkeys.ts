@@ -19,6 +19,10 @@ function isTextInput(target: EventTarget | null): boolean {
 /** Returns true when the key was handled. Exported for tests. */
 export function handleHotkey(code: string): boolean {
   const s = useGameStore.getState()
+  if (code === 'KeyM' && s.overlay === 'map') {
+    s.closeOverlay()
+    return true
+  }
   if (code === 'Escape' || code === 'KeyP') {
     if (s.overlay !== 'none') s.closeOverlay()
     else if (s.screen === 'flight') s.togglePause()
@@ -32,6 +36,7 @@ export function handleHotkey(code: string): boolean {
   else if (CAMERA_KEYS[code]) s.setCameraMode(CAMERA_KEYS[code])
   else if (code === 'KeyH') s.toggleHud()
   else if (code === 'KeyI') s.toggleInstruments()
+  else if (code === 'KeyM') s.openOverlay('map')
   else return false
   return true
 }

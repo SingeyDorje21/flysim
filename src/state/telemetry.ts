@@ -47,6 +47,18 @@ export interface TelemetrySnapshot {
   simTime: number
   position: Vec3
   challenge: ChallengeProgress | null
+  nav: NavInfo
+}
+
+export interface NavInfo {
+  /** Closest airport: distance (m) and bearing (deg) from the aircraft. */
+  nearest: { code: string; name: string; distance: number; bearingDeg: number } | null
+  /**
+   * Runway end being approached (in front, aligned, within 15 km), with
+   * deviations from the extended centreline (m, + = right of it) and the
+   * 3 degree glide path (m, + = above it).
+   */
+  approach: { code: string; runway: string; distance: number; lateral: number; vertical: number } | null
 }
 
 export const INITIAL_TELEMETRY: Readonly<TelemetrySnapshot> = deepFreeze({
@@ -77,6 +89,7 @@ export const INITIAL_TELEMETRY: Readonly<TelemetrySnapshot> = deepFreeze({
   simTime: 0,
   position: { x: 0, y: 0, z: 0 },
   challenge: null,
+  nav: { nearest: null, approach: null },
 })
 
 function deepFreeze<T extends object>(obj: T): T {
