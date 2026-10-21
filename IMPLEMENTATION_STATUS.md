@@ -41,6 +41,15 @@ three 0.186.1, @react-three/fiber 9.8.2 (no drei), zustand 5.0.15, Vitest 5.0.5,
 4. A held Space (brakes) could auto-repeat into the focused Retry button; now suppressed.
 5. Objective text aligned with scoring (bank/sink limits are score bonuses, not failures).
 
+## Phase 1: world and terrain (branch `feature/phase1-world`)
+- 100 km world: a 38 km main island with islets, lakes and rivers, and peaks to ~1,800 m. The airport, corridors and ring course are kept.
+- Streaming quadtree terrain: levels 0-7, 32x32-cell chunks, built in Web Workers. Level 0 is the 30 m physics grid
+  and always covers at least 1.5 km around the camera, so the ground near the aircraft is exactly the ground physics hits.
+- Height/slope terrain material, three tree types streamed by chunk, time-of-day sky/lighting/fog (morning, noon, evening),
+  animated water shader, clouds over the whole world.
+- Quality now sets view distance, LOD bias, tree density, cloud count, shadows and fog; it never changes physics.
+- Gate: 205 tests passing; build bundles the terrain worker.
+
 ## Known limitations
 - No wind, prop torque/P-factor or asymmetric stall wing-drop; gear force is vertical.
 - No audio, gamepad or touch controls; keyboard + mouse (free-look) only.
