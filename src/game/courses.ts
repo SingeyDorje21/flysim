@@ -1,6 +1,7 @@
 import type { RingDef } from './types'
 
-const RING_RADIUS = 20
+/** Generous for keyboard flying: a miss costs a ~40 s recovery orbit. */
+const RING_RADIUS = 30
 
 /**
  * Ring course: north over the airport, a counter-clockwise loop through the

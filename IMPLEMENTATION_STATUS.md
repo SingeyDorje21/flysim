@@ -27,9 +27,10 @@ three 0.186.1, @react-three/fiber 9.8.2 (no drei), zustand 5.0.15, Vitest 5.0.5,
 - Persisted settings and scores are validated on load.
 
 ## Verification (latest run)
-- `npm run typecheck`, `npm run lint`: clean. `npm test`: 14 files, 169 tests passing. `npm run build`: OK (1.23 MB JS, 342 kB gzip).
-- Session integration tests fly a scripted take-off and landing to challenge success on the real terrain,
-  plus crash reporting, pause freeze and reset.
+- `npm run typecheck`, `npm run lint`: clean. `npm test`: 14 files, 170 tests passing. `npm run build`: OK (1.23 MB JS, 342 kB gzip).
+- Session integration tests fly a scripted take-off, landing and the full ring course (263 s of the
+  360 s limit) to challenge success on the real terrain, plus crash reporting, pause freeze and reset.
+- Ring radius widened 20 m -> 30 m: with 20 m the scripted pilot missed rings and ran out of time.
 - Browser (dev server): menus, mode select, flight, pause, settings/quality switch, controls, results,
   restart and chase/cockpit/free cameras checked. The only console warning is `THREE.Clock` deprecated (inside R3F).
 

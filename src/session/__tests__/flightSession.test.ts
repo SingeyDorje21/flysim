@@ -84,6 +84,49 @@ describe('FlightSession integration (real terrain, physics and challenge)', () =
     expect(results[0].mode).toBe('landing')
   })
 
+  it('completes the ring course inside the time limit with a simple scripted pilot', () => {
+    const { session, results } = makeSession('rings')
+    const s = () => session.physics.state
+    hold(session, 'KeyR', true)
+    fly(
+      session,
+      400,
+      () => {
+        const st = s()
+        const ring = session.ringView.rings[session.ringView.nextIndex]
+        if (!ring) return
+        // Line up on the ring's axis like a pilot would: aim at a lead-in point
+        // behind the ring, sliding onto the centre as the ring gets close.
+        const h = (ring.headingDeg * Math.PI) / 180
+        const nx = Math.sin(h)
+        const nz = -Math.cos(h)
+        const along = (ring.position.x - st.position.x) * nx + (ring.position.z - st.position.z) * nz
+        const lead = Math.max(0, Math.min(400, along * 0.5))
+        const dx = ring.position.x - nx * lead - st.position.x
+        const dz = ring.position.z - nz * lead - st.position.z
+        const bearing = (Math.atan2(dx, -dz) * 180) / Math.PI
+        const headingErr = ((bearing - st.headingDeg + 540) % 360) - 180
+        const bankTarget = Math.max(-35, Math.min(35, headingErr * 1.5))
+        hold(session, 'KeyD', st.bankDeg < bankTarget - 3)
+        hold(session, 'KeyA', st.bankDeg > bankTarget + 3)
+        const vsTarget = Math.max(-5, Math.min(5, (ring.position.y - st.position.y) * 0.15))
+        hold(session, 'KeyS', st.verticalSpeed < vsTarget - 0.3)
+        hold(session, 'KeyW', st.verticalSpeed > vsTarget + 0.3)
+      },
+      () => results.length > 0,
+    )
+    expect(results).toHaveLength(1)
+    const summary = JSON.stringify({
+      headline: results[0].headline,
+      reason: results[0].reason,
+      time: Math.round(results[0].timeSec),
+      ringsPassed: session.ringView.nextIndex,
+      pos: s().position,
+    })
+    expect(results[0].outcome, summary).toBe('success')
+    expect(results[0].timeSec).toBeLessThan(360)
+  })
+
   it('reports a crash once, after the result delay', () => {
     const { session, results } = makeSession('rings')
     hold(session, 'KeyW', true)
