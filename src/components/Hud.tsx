@@ -4,6 +4,7 @@ import { useGameStore } from '../state/gameStore'
 import { useTelemetry } from '../state/telemetry'
 import { HUD_COMMANDS } from './controlsData'
 import { ApproachIndicator } from './Approach'
+import { CoachPanel } from './Coach'
 import { formatAltitude, formatDistance, formatSpeed, formatTime, formatVerticalSpeed } from './format'
 import { Minimap } from './Minimap'
 import './Hud.css'
@@ -60,7 +61,8 @@ export function Hud() {
   const cameraMode = useGameStore((s) => s.cameraMode)
   const setCameraMode = useGameStore((s) => s.setCameraMode)
   const showInstruments = useGameStore((s) => s.settings.showInstruments)
-  const c = t.challenge
+  const lesson = t.lesson
+  const c = lesson ? null : t.challenge
   const nav = t.nav
   const lowAgl = t.heightAboveGround < 300 && !t.onGround
   const isJet = getAircraft(t.aircraftId).engineKind !== 'piston'
@@ -91,6 +93,7 @@ export function Hud() {
         screens it wraps into a second column to the left instead.
       */}
       <div className="hud-rightcol">
+          {lesson && <CoachPanel lesson={lesson} units={units} />}
           {c && (
             <div className={`hud-challenge status-${c.status}`} data-testid="challenge">
               <div className="challenge-objective">{c.objective}</div>

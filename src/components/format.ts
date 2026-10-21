@@ -104,3 +104,23 @@ export function formatRunwayLength(m: number, units: Units): string {
 export function shortAircraftName(name: string): string {
   return name.split(' ')[0].replace(/-\d{3}$/, '')
 }
+
+/** Lesson cue value: speed in kt / km/h, altitude in ft / m, degrees as deg, percent as %. */
+export function formatCueValue(kind: 'speed' | 'altitude' | 'degrees' | 'percent', v: number, units: Units): string {
+  switch (kind) {
+    case 'speed':
+      return formatSpeed(v, units)
+    case 'altitude':
+      return formatAltitude(v, units)
+    case 'degrees':
+      return `${Math.round(safe(v))}\u00b0`
+    case 'percent':
+      return `${Math.round(safe(v))}%`
+  }
+}
+
+/** Flap lever 0..1 as UP / 1 / 2 / FULL. */
+export function flapLabel(lever: number): string {
+  const d = ['UP', '1', '2', 'FULL']
+  return d[Math.min(d.length - 1, Math.max(0, Math.round(safe(lever) * (d.length - 1))))]
+}

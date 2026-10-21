@@ -32,6 +32,16 @@ export function HowItWorks() {
         </h2>
 
         <section className="guide-section">
+          <h3>Flight School</h3>
+          <p>
+            New pilots: start in <strong>Flight School</strong> on the main menu. Pick your aircraft and take a
+            guided Take-off or Landing Lesson. A coach panel tells you what to do next, which keys to press and
+            shows a gauge with the target band for speed, pitch or height. Assists and voice callouts are on by
+            default; you can switch them off in Settings.
+          </p>
+        </section>
+
+        <section className="guide-section">
           <h3>Your first flight</h3>
           <ol className="guide-steps">
             <li>
@@ -162,7 +172,7 @@ export function HowItWorks() {
         <section className="guide-section">
           <h3>Game modes</h3>
           <ul>
-            {GAME_MODES.map((m) => (
+            {GAME_MODES.filter((m) => m.kind === 'challenge').map((m) => (
               <li key={m.id}>
                 <strong>{m.name}:</strong> {m.tagline}.
               </li>
