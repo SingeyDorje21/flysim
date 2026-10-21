@@ -29,6 +29,8 @@ export interface AudioFrame {
   teleportId: number
   /** Paused or on the results screen: everything goes quiet. */
   frozen: boolean
+  /** Flight School step counter (0 outside lessons); a change plays a chime. */
+  lessonStep: number
 }
 
 export interface SoundLevels {
@@ -56,6 +58,7 @@ export type SoundEvent =
   | { type: 'ring' }
   | { type: 'flaps' }
   | { type: 'throttle' }
+  | { type: 'step' }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 
@@ -107,6 +110,7 @@ export class SoundEventDetector {
           events.push({ type: 'touchdown', sink: Math.max(0, -prev.verticalSpeed), groundSpeed: f.groundSpeed })
         }
         if (f.ringsPassed > prev.ringsPassed) events.push({ type: 'ring' })
+        if (f.lessonStep > prev.lessonStep) events.push({ type: 'step' })
         if (f.flaps !== prev.flaps) events.push({ type: 'flaps' })
         // A detent click every 10% of throttle travel.
         const step = Math.round(f.throttle * 10)

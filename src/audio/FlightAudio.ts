@@ -190,6 +190,11 @@ function play(g: Graph, e: SoundEvent): void {
       if (e.groundSpeed > 15) noiseBurst(g, 'bandpass', 1800, 0.12 + 0.2 * firm, 0.35)
       break
     }
+    case 'step':
+      // Lesson step done: a soft rising two-note chime.
+      tone(g, 'triangle', 660, 660, 0.12, 0.18)
+      tone(g, 'triangle', 990, 990, 0.12, 0.3, 0.1)
+      break
     case 'ring':
       tone(g, 'sine', 880, 880, 0.2, 0.25)
       tone(g, 'sine', 1320, 1320, 0.2, 0.4, 0.12)

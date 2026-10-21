@@ -22,6 +22,7 @@ function frame(over: Partial<AudioFrame> = {}): AudioFrame {
     ringsPassed: 0,
     teleportId: 1,
     frozen: false,
+    lessonStep: 0,
     ...over,
   }
 }
