@@ -6,7 +6,8 @@
 
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import type { Quality } from '../config/quality'
+import { QUALITY_LEVELS, type Quality } from '../config/quality'
+import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES, type CameraMode, type FlightResult, type GameMode } from '../game/types'
 
 export type Screen = 'mainMenu' | 'modeSelect' | 'flight' | 'results'
@@ -108,6 +109,45 @@ const safeStorage: StateStorage = {
 
 type PersistedSlice = Pick<GameState, 'settings' | 'bestScores'>
 
+const UNITS: readonly Units[] = ['imperial', 'metric']
+
+function oneOf<T>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.includes(value as T) ? (value as T) : fallback
+}
+
+function bool(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+/** Stored data may be stale or hand-edited: keep only valid fields, default the rest. */
+export function sanitizeSettings(raw: unknown): Settings {
+  const d = DEFAULT_SETTINGS
+  if (!raw || typeof raw !== 'object') return d
+  const r = raw as Record<string, unknown>
+  const sens = r.mouseSensitivity
+  return {
+    quality: oneOf(r.quality, QUALITY_LEVELS, d.quality),
+    units: oneOf(r.units, UNITS, d.units),
+    invertPitch: bool(r.invertPitch, d.invertPitch),
+    showHud: bool(r.showHud, d.showHud),
+    showInstruments: bool(r.showInstruments, d.showInstruments),
+    defaultCamera: oneOf(r.defaultCamera, CAMERA_MODES, d.defaultCamera),
+    mouseSensitivity:
+      typeof sens === 'number' && Number.isFinite(sens) ? Math.min(3, Math.max(0.2, sens)) : d.mouseSensitivity,
+  }
+}
+
+export function sanitizeBestScores(raw: unknown): Partial<Record<GameMode, number>> {
+  const out: Partial<Record<GameMode, number>> = {}
+  if (!raw || typeof raw !== 'object') return out
+  const r = raw as Record<string, unknown>
+  for (const { id } of GAME_MODES) {
+    const v = r[id]
+    if (typeof v === 'number' && Number.isFinite(v)) out[id] = v
+  }
+  return out
+}
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
@@ -122,8 +162,9 @@ export const useGameStore = create<GameState>()(
       bestScores: {},
       settings: DEFAULT_SETTINGS,
 
-      goToMainMenu: () => set({ screen: 'mainMenu', overlay: 'none', paused: false, result: null }),
-      goToModeSelect: () => set({ screen: 'modeSelect', overlay: 'none', paused: false, result: null }),
+      goToMainMenu: () => set({ screen: 'mainMenu', overlay: 'none', paused: false, result: null, newBest: false }),
+      goToModeSelect: () =>
+        set({ screen: 'modeSelect', overlay: 'none', paused: false, result: null, newBest: false }),
       openOverlay: (overlay) => set({ overlay }),
       closeOverlay: () => set({ overlay: 'none' }),
 
@@ -139,15 +180,12 @@ export const useGameStore = create<GameState>()(
           flightId: s.flightId + 1,
         })),
 
-      restartFlight: () =>
-        set((s) => ({
-          screen: 'flight',
-          overlay: 'none',
-          paused: false,
-          result: null,
-          newBest: false,
-          flightId: s.flightId + 1,
-        })),
+      /** Only from a running flight or its results; elsewhere there is nothing to restart. */
+      restartFlight: () => {
+        const s = get()
+        if (s.screen !== 'flight' && s.screen !== 'results') return
+        set({ screen: 'flight', overlay: 'none', paused: false, result: null, newBest: false, flightId: s.flightId + 1 })
+      },
 
       pause: () => {
         if (get().screen === 'flight') set({ paused: true })
@@ -193,13 +231,16 @@ export const useGameStore = create<GameState>()(
       name: 'flysim-v1',
       storage: createJSONStorage(() => safeStorage),
       partialize: (s): PersistedSlice => ({ settings: s.settings, bestScores: s.bestScores }),
-      // Merge settings field by field so settings added later get their defaults.
+      // Validate field by field: settings added later get their defaults and
+      // corrupt values never reach the renderer.
       merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<PersistedSlice>
+        const p = (persisted ?? {}) as Partial<Record<keyof PersistedSlice, unknown>>
+        const settings = sanitizeSettings(p.settings)
         return {
           ...current,
-          bestScores: { ...current.bestScores, ...p.bestScores },
-          settings: { ...current.settings, ...p.settings },
+          bestScores: sanitizeBestScores(p.bestScores),
+          settings,
+          cameraMode: settings.defaultCamera,
         }
       },
     },

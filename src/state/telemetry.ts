@@ -49,7 +49,7 @@ export interface TelemetrySnapshot {
   challenge: ChallengeProgress | null
 }
 
-export const INITIAL_TELEMETRY: TelemetrySnapshot = {
+export const INITIAL_TELEMETRY: Readonly<TelemetrySnapshot> = deepFreeze({
   airspeed: 0,
   groundSpeed: 0,
   altitude: 0,
@@ -77,6 +77,13 @@ export const INITIAL_TELEMETRY: TelemetrySnapshot = {
   simTime: 0,
   position: { x: 0, y: 0, z: 0 },
   challenge: null,
+})
+
+function deepFreeze<T extends object>(obj: T): T {
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === 'object') deepFreeze(value)
+  }
+  return Object.freeze(obj)
 }
 
 let current: TelemetrySnapshot = INITIAL_TELEMETRY

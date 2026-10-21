@@ -1,4 +1,22 @@
-// Placeholder shell; replaced during integration with <FlightCanvas /> + <GameUI />.
+import { GameUI } from './components/GameUI'
+import { useHotkeys } from './input/hotkeys'
+import { CanvasErrorBoundary } from './session/CanvasErrorBoundary'
+import { FlightCanvas } from './session/FlightCanvas'
+import { useGameStore } from './state/gameStore'
+
 export default function App() {
-  return <div style={{ padding: 24 }}>FlySim is being assembled.</div>
+  useHotkeys()
+  const screen = useGameStore((s) => s.screen)
+  const inFlight = screen === 'flight' || screen === 'results'
+
+  return (
+    <>
+      {inFlight && (
+        <CanvasErrorBoundary>
+          <FlightCanvas />
+        </CanvasErrorBoundary>
+      )}
+      <GameUI />
+    </>
+  )
 }
