@@ -15,7 +15,8 @@ function allFinite(s: AircraftState): boolean {
     s.orientation.x, s.orientation.y, s.orientation.z, s.orientation.w,
     s.angularVelocity.x, s.angularVelocity.y, s.angularVelocity.z,
     s.surfaces.elevator, s.surfaces.aileron, s.surfaces.rudder, s.surfaces.flaps,
-    s.engine.rpm, s.engine.spool, s.engine.thrust,
+    s.engine.rpm, s.engine.spool, s.engine.thrust, s.engine.n1,
+    s.gearPosition, s.speedbrakePosition, s.thrustVector, s.mach,
     s.airspeed, s.groundSpeed, s.altitude, s.heightAboveGround, s.verticalSpeed,
     s.angleOfAttack, s.sideslip, s.headingDeg, s.pitchDeg, s.bankDeg, s.gForce, s.simTime,
   ]
@@ -170,9 +171,17 @@ describe('numerical safety', () => {
       flaps: Number.POSITIVE_INFINITY,
       brakes: 2,
       trim: -9,
+      gear: -5,
+      speedbrake: 3,
+      reverse: Number.NaN,
     })
     sim.step()
-    expect(sim.state.controls).toEqual({ pitch: 0, roll: 1, yaw: -1, throttle: 0, flaps: 1, brakes: 1, trim: -1 })
+    // The trainer has fixed gear, no speed brakes and no reversers: those commands are discarded.
+    expect(sim.state.controls).toEqual({
+      pitch: 0, roll: 1, yaw: -1, throttle: 0, flaps: 1, brakes: 1, trim: -1, gear: 1, speedbrake: 0, reverse: 0,
+    })
+    expect(sim.state.gearPosition).toBe(1)
+    expect(sim.state.speedbrakePosition).toBe(0)
     sim.setControls({ throttle: Number.NaN })
     sim.step()
     expect(sim.state.controls.throttle).toBe(0)
