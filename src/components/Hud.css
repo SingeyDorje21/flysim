@@ -249,6 +249,30 @@
   font-size: 0.8rem;
 }
 .approach-title { background: var(--panel); border-radius: 6px; padding: 2px 8px; }
+.approach-assist { background: var(--panel); border-radius: 6px; padding: 1px 8px; font-size: 0.72rem; color: var(--text-dim); }
+.approach-assist kbd {
+  border: 1px solid rgba(125, 255, 176, 0.35);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-family: var(--font-mono);
+  color: var(--hud);
+}
+.approach-assist.on { color: #04121d; background: var(--hud); font-weight: 700; letter-spacing: 0.06em; }
+/* Autopilot / landing assist message: shown, then fades after a few seconds. */
+.alert-ap {
+  color: var(--hud);
+  border: 1px solid var(--hud);
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  animation: ap-message 6s forwards;
+}
+@keyframes ap-message {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .alert-ap { animation-timing-function: steps(1, end); }
+}
 .approach-body { display: flex; align-items: center; gap: 10px; }
 .gs-scale { position: relative; width: 14px; height: 120px; }
 .loc-scale { position: absolute; top: 132px; left: 50%; width: 120px; height: 14px; transform: translateX(-50%); }

@@ -163,10 +163,11 @@ export class AutopilotController {
     vs = clamp(vs, -t.maxDescent, t.maxClimb)
 
     // Speed protection: never trade the speed away for the vertical target.
-    const minSpeed = s.controls.flaps > 0 ? this.minSpeedFlaps : this.minSpeedClean
+    // Gear or flaps out is landing configuration (the F-22 has no flaps): approach speeds are fine.
+    const minSpeed = s.controls.flaps > 0 || s.gearPosition > 0.5 ? this.minSpeedFlaps : this.minSpeedClean
     if (s.airspeed < minSpeed) vs = Math.min(vs, -(minSpeed - s.airspeed) * SPEED_PROTECT_GAIN)
     if (s.airspeed > this.maxSpeed) vs = Math.max(vs, (s.airspeed - this.maxSpeed) * SPEED_PROTECT_GAIN)
-    if (cmd.athr) {
+    if (cmd.athr && cmd.speedPriority !== false) {
       // Speed priority: at full (or idle) thrust the climb (or descent) is reduced so the
       // selected speed still holds, as an airliner's climb modes do.
       const slow = cmd.targets.speed - s.airspeed - SPEED_PRIORITY_MARGIN

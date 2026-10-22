@@ -4,6 +4,7 @@
  */
 
 import { useEffect } from 'react'
+import { useAutopilotStore } from '../state/autopilotStore'
 import { useGameStore } from '../state/gameStore'
 import type { CameraMode } from '../game/types'
 
@@ -37,6 +38,7 @@ export function handleHotkey(code: string): boolean {
   else if (code === 'KeyH') s.toggleHud()
   else if (code === 'KeyI') s.toggleInstruments()
   else if (code === 'KeyM') s.openOverlay('map')
+  else if (code === 'Digit0' || code === 'Numpad0') useAutopilotStore.getState().requestAssist()
   else return false
   return true
 }

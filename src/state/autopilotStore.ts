@@ -8,6 +8,7 @@
  */
 
 import { create } from 'zustand'
+import type { AssistView } from '../autopilot/landingAssist'
 import type { AutopilotTargets, TargetField, VerticalAnnunciation, VerticalMode } from '../autopilot/types'
 
 export interface AutopilotState {
@@ -20,6 +21,11 @@ export interface AutopilotState {
   dialed: Record<TargetField, boolean>
   /** Last disconnect or refusal, e.g. "AP OFF: pilot input". Cleared on the next engagement. */
   message: string | null
+  /** Landing assist (key 0) while it flies: the runway and the deviations; null when off. */
+  assist: AssistView | null
+  /** Bumped by each press of the landing-assist key; the session engages or cancels on a change. */
+  assistRequests: number
+  requestAssist(): void
   toggleAp(): void
   toggleAthr(): void
   setVertical(mode: VerticalMode): void
@@ -50,6 +56,9 @@ export const useAutopilotStore = create<AutopilotState>()((set) => ({
   annunciation: 'ALT',
   dialed: { ...NONE_DIALED },
   message: null,
+  assist: null,
+  assistRequests: 0,
+  requestAssist: () => set((s) => ({ assistRequests: s.assistRequests + 1 })),
   toggleAp: () => set((s) => ({ ap: !s.ap, message: s.ap ? s.message : null })),
   toggleAthr: () => set((s) => ({ athr: !s.athr, message: s.athr ? s.message : null })),
   // A new V/S starts from the current vertical speed (the session keeps it following until then).
@@ -80,5 +89,6 @@ export function resetAutopilot(): void {
     annunciation: 'ALT',
     dialed: { ...NONE_DIALED },
     message: null,
+    assist: null,
   })
 }

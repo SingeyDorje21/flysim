@@ -13,7 +13,16 @@ const TICKS = [-1, -0.5, 0, 0.5, 1]
  * Diamonds show where the course is relative to the aircraft: aircraft right of
  * the centreline puts the diamond left (fly left); aircraft above the slope puts it below.
  */
-export function ApproachIndicator({ approach, units }: { approach: NonNullable<NavInfo['approach']>; units: Units }) {
+export function ApproachIndicator({
+  approach,
+  units,
+  assisting = false,
+}: {
+  approach: NonNullable<NavInfo['approach']>
+  units: Units
+  /** The landing assist is flying: say so instead of offering it. */
+  assisting?: boolean
+}) {
   const lateral = clamp(approach.lateral, FULL_SCALE_LATERAL)
   const vertical = clamp(approach.vertical, FULL_SCALE_VERTICAL)
   const lat = lateral / FULL_SCALE_LATERAL
@@ -23,6 +32,15 @@ export function ApproachIndicator({ approach, units }: { approach: NonNullable<N
       <div className="approach-title">
         RWY {approach.runway} {approach.code} ·{' '}
         <span data-testid="approach-distance">{formatDistance(approach.distance, units)}</span>
+      </div>
+      <div className={assisting ? 'approach-assist on' : 'approach-assist'} data-testid="approach-assist">
+        {assisting ? (
+          'LANDING ASSIST · lining up'
+        ) : (
+          <>
+            <kbd>0</kbd> Landing assist
+          </>
+        )}
       </div>
       <div className="approach-body">
         <div

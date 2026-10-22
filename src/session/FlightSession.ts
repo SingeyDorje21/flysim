@@ -5,6 +5,8 @@
  */
 
 import { AutopilotController } from '../autopilot/Autopilot'
+import { LandingAssist } from '../autopilot/landingAssist'
+import { getAircraft } from '../config/aircraftCatalog'
 import { AP_MIN_HEIGHT } from '../autopilot/tuning'
 import type { AutopilotTargets, TargetField } from '../autopilot/types'
 import { getAircraftConfig } from '../config/aircraft'
@@ -80,6 +82,10 @@ export class FlightSession {
   private autothrustIntegral = 0
   private autothrustBase = 0.4
   private readonly autopilot: AutopilotController
+  private readonly landingAssist: LandingAssist
+  /** Landing-assist key presses already handled, and the throttle the assist last set. */
+  private assistRequestsSeen = 0
+  private assistThrottle = 0
   private apActive = false
   private athrActive = false
   private athrThrottle = 0
@@ -103,6 +109,7 @@ export class FlightSession {
     this.flareAssistGain = getAircraftConfig(this.aircraftId).fbw ? 1 / (GRAVITY * 1.5) : 0.6
     this.onFinish = options.onFinish
     this.autopilot = new AutopilotController(this.aircraftId)
+    this.landingAssist = new LandingAssist(this.aircraftId)
     this.physics = new AircraftPhysics({
       terrain: this.terrain,
       spawn: spawnFor(this.mode, this.place, this.aircraftId),
@@ -159,7 +166,9 @@ export class FlightSession {
     this.autopilot.reset()
     this.apActive = false
     this.athrActive = false
+    this.landingAssist.cancel()
     resetAutopilot()
+    this.assistRequestsSeen = useAutopilotStore.getState().assistRequests
     this.renderState.teleportId++
     this.syncRenderState(1)
     this.publish()
@@ -370,9 +379,85 @@ export class FlightSession {
     if (next) useAutopilotStore.setState({ targets: next })
   }
 
+  /** A press of the landing-assist key: engage it on the runway ahead, or cancel it. */
+  private handleAssistRequest(): void {
+    const store = useAutopilotStore.getState()
+    if (store.assistRequests === this.assistRequestsSeen) return
+    this.assistRequestsSeen = store.assistRequests
+    if (this.landingAssist.active) {
+      this.stopAssist('Landing assist off')
+      return
+    }
+    const s = this.physics.state
+    const refusal = this.landingAssist.engage(s)
+    if (refusal) {
+      useAutopilotStore.setState({ message: refusal })
+      return
+    }
+    // The assist flies the stick and throttle itself; the autopilot and autothrust drop out.
+    useAutopilotStore.setState({ ap: false, athr: false, message: null, assist: this.landingAssist.view })
+    this.apActive = false
+    this.athrActive = false
+    this.assistThrottle = s.controls.throttle
+    // Landing configuration: gear down and landing flaps, left set when it hands over.
+    this.keyboard.setGear(1)
+    this.keyboard.setFlaps(getAircraft(this.aircraftId).landingFlaps)
+  }
+
+  private stopAssist(message: string): void {
+    this.landingAssist.cancel()
+    this.apDisconnectCount++
+    useAutopilotStore.setState({ assist: null, message })
+  }
+
+  /**
+   * Landing assist: lines up with the runway and the glide path, then lets go
+   * with the aircraft trimmed and the levers where it left them. The stick or
+   * throttle keys, or touching the ground, cancel it.
+   */
+  private applyLandingAssist(controls: ControlInputs, dt: number): void {
+    const s = this.physics.state
+    if (Math.abs(controls.pitch) > PILOT_OVERRIDE || Math.abs(controls.roll) > PILOT_OVERRIDE) {
+      this.stopAssist('Landing assist off: pilot input')
+      return
+    }
+    if (Math.abs(controls.throttle - this.assistThrottle) > THROTTLE_OVERRIDE) {
+      this.stopAssist('Landing assist off: throttle moved')
+      return
+    }
+    if (s.onGround || s.crashed) {
+      this.stopAssist('Landing assist off: on the ground')
+      return
+    }
+    const runway = this.landingAssist.view?.runway ?? ''
+    // Keep asking for the landing configuration: gear and flaps refused while too fast come
+    // out once the speed is down (the keyboard levers follow what the aircraft accepted).
+    controls.gear = 1
+    controls.flaps = getAircraft(this.aircraftId).landingFlaps
+    this.keyboard.setGear(1)
+    this.keyboard.setFlaps(controls.flaps)
+    const release = this.landingAssist.update(s, controls, dt)
+    this.keyboard.setThrottle(controls.throttle)
+    this.assistThrottle = controls.throttle
+    if (!release) return
+    // Hand over trimmed: the trainer's held stick moves into the trim lever, so the elevator
+    // stays put; a fly-by-wire jet holds its path and bank by itself with the stick neutral.
+    const cfg = getAircraftConfig(this.aircraftId)
+    if (!cfg.fbw) {
+      this.keyboard.setTrim(controls.trim + (controls.pitch * cfg.surfaces.elevatorMax) / cfg.surfaces.trimRange)
+    }
+    this.stopAssist(
+      release === 'aligned'
+        ? `Lined up with ${runway} on the glide path: you have control`
+        : `Landing assist off below 200 ft: you have control`,
+    )
+  }
+
   private readonly stepOnce = (dt: number): void => {
     const controls = this.keyboard.update(dt)
-    this.applyAutopilot(controls, dt)
+    this.handleAssistRequest()
+    if (this.landingAssist.active) this.applyLandingAssist(controls, dt)
+    else this.applyAutopilot(controls, dt)
     this.applyFlareAssist(controls)
     // The tail-strike guard has the final say over pitch.
     if (this.assistsActive) this.applyTailStrikeGuard(controls)
@@ -414,6 +499,7 @@ export class FlightSession {
   private publish(): void {
     const s = this.physics.state
     this.syncAutopilotTargets()
+    if (this.landingAssist.active) useAutopilotStore.setState({ assist: this.landingAssist.view })
     publishTelemetry({
       airspeed: s.airspeed,
       groundSpeed: s.groundSpeed,

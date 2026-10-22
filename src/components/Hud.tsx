@@ -1,5 +1,6 @@
 import { getAircraft } from '../config/aircraftCatalog'
 import { CAMERA_MODES, type CameraMode } from '../game/types'
+import { useAutopilotStore } from '../state/autopilotStore'
 import { useGameStore } from '../state/gameStore'
 import { useTelemetry } from '../state/telemetry'
 import { HUD_COMMANDS } from './controlsData'
@@ -61,6 +62,8 @@ export function Hud() {
   const cameraMode = useGameStore((s) => s.cameraMode)
   const setCameraMode = useGameStore((s) => s.setCameraMode)
   const showInstruments = useGameStore((s) => s.settings.showInstruments)
+  const assist = useAutopilotStore((s) => s.assist)
+  const apMessage = useAutopilotStore((s) => s.message)
   const lesson = t.lesson
   const c = lesson ? null : t.challenge
   const nav = t.nav
@@ -215,11 +218,17 @@ export function Hud() {
         {!t.crashed && t.onGround && <div className="alert alert-ground">ON GROUND</div>}
         {/* Centre-screen too, so it shows even where the engine box is hidden (narrow screens). */}
         {!t.crashed && gear.level === 'warn' && <div className="alert alert-stall flash">GEAR UP</div>}
+        {/* Keyed by the text, so a new message restarts the fade. */}
+        {apMessage && (
+          <div key={apMessage} className="alert alert-ap" data-testid="ap-message">
+            {apMessage}
+          </div>
+        )}
       </div>
 
       <HeadingTape heading={t.headingDeg} />
 
-      {nav.approach && <ApproachIndicator approach={nav.approach} units={units} />}
+      {nav.approach && <ApproachIndicator approach={nav.approach} units={units} assisting={assist !== null} />}
 
       <div className="hud-box hud-left">
         <div className="hud-label">AIRSPEED</div>

@@ -29,6 +29,11 @@ export interface AutopilotCommand {
   athr: boolean
   vertical: VerticalMode
   targets: AutopilotTargets
+  /**
+   * Default true: at a thrust limit the climb or descent gives way to hold the
+   * speed. False when the path matters more (the landing assist's glide path).
+   */
+  speedPriority?: boolean
 }
 
 /** Mode annunciation shown on the HUD (like an airliner's flight mode annunciator). */

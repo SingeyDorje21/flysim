@@ -100,6 +100,25 @@ export class KeyboardControls {
     this.throttle = clamp(value, 0, 1)
   }
 
+  /** Set the trim lever (the landing assist hands over trimmed). */
+  setTrim(value: number): void {
+    this.trim = clamp(value, -1, 1)
+  }
+
+  /** Put the flap lever in the detent nearest `lever` (0..1). */
+  setFlaps(lever: number): void {
+    let best = 0
+    FLAP_DETENTS.forEach((d, i) => {
+      if (Math.abs(d - lever) < Math.abs(FLAP_DETENTS[best] - lever)) best = i
+    })
+    this.flapIndex = best
+  }
+
+  /** Gear lever: 1 = down. */
+  setGear(lever: number): void {
+    this.gear = lever > 0.5 ? 1 : 0
+  }
+
   isHeld(code: string): boolean {
     return this.pressed.has(code)
   }

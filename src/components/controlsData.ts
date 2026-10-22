@@ -16,6 +16,7 @@ export const FLIGHT_BINDINGS: readonly Binding[] = [
   { action: 'Speed brake toggle', keys: 'V' },
   { action: 'Reverse thrust (hold, on the ground)', keys: 'Y' },
   { action: 'Elevator trim nose up / down', keys: '. / ,' },
+  { action: 'Landing assist: line up with the runway ahead, then hand over (press again to cancel)', keys: '0' },
 ]
 
 /** F-22 afterburner has no key: it lights at full throttle. */
@@ -42,6 +43,7 @@ export const HUD_COMMANDS: readonly (readonly [string, string])[] = [
   ['V', 'Speed brk'],
   ['Y', 'Reverse'],
   ['. / ,', 'Trim'],
+  ['0', 'Land assist'],
   ['C', 'Camera'],
   ['H / I', 'HUD / panel'],
   ['M', 'Map'],
