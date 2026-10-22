@@ -4,6 +4,9 @@
  * Owned by the orchestrator.
  */
 
+import { AutopilotController } from '../autopilot/Autopilot'
+import { AP_MIN_HEIGHT } from '../autopilot/tuning'
+import type { AutopilotTargets, TargetField } from '../autopilot/types'
 import { getAircraftConfig } from '../config/aircraft'
 import type { AircraftId } from '../config/aircraftCatalog'
 import { GRAVITY } from '../simulation/atmosphere'
@@ -18,6 +21,7 @@ import { AircraftPhysics } from '../simulation/AircraftPhysics'
 import { FixedTimestep } from '../simulation/FixedTimestep'
 import { interpolatePose } from '../simulation/interpolate'
 import type { AircraftRenderState, ControlInputs, FlightModel, TerrainSampler } from '../simulation/types'
+import { clearDialed, resetAutopilot, useAutopilotStore } from '../state/autopilotStore'
 import { publishTelemetry, resetTelemetry, type NavInfo } from '../state/telemetry'
 import { getTerrainSampler } from '../world/terrain/terrainSampler'
 
@@ -25,6 +29,12 @@ const TELEMETRY_INTERVAL = 1 / 30
 /** Real seconds between the flight being decided and the results screen. */
 const RESULT_DELAY = { success: 1.2, failure: 2.5 } as const
 const RAD2DEG = 180 / Math.PI
+/** Stick input (from the keys) that takes over from the autopilot. */
+const PILOT_OVERRIDE = 0.15
+/** Throttle lever movement away from the autothrust's setting that disconnects it. */
+const THROTTLE_OVERRIDE = 0.015
+/** Change in the aircraft's state worth re-publishing to a disengaged target (SI). */
+const TARGET_SYNC_EPS: Record<TargetField, number> = { speed: 0.25, headingDeg: 0.5, altitude: 1, verticalSpeed: 0.1 }
 
 export interface FlightSessionOptions {
   mode: GameMode
@@ -69,6 +79,11 @@ export class FlightSession {
   private flared = false
   private autothrustIntegral = 0
   private autothrustBase = 0.4
+  private readonly autopilot: AutopilotController
+  private apActive = false
+  private athrActive = false
+  private athrThrottle = 0
+  private apDisconnectCount = 0
   private mode: GameMode
   private place: FlightPlace
   private challenge: Challenge
@@ -87,6 +102,7 @@ export class FlightSession {
     // 1 g extra at full stick with the gear down): enough to arrest the excess sink in ~1.5 s.
     this.flareAssistGain = getAircraftConfig(this.aircraftId).fbw ? 1 / (GRAVITY * 1.5) : 0.6
     this.onFinish = options.onFinish
+    this.autopilot = new AutopilotController(this.aircraftId)
     this.physics = new AircraftPhysics({
       terrain: this.terrain,
       spawn: spawnFor(this.mode, this.place, this.aircraftId),
@@ -140,6 +156,10 @@ export class FlightSession {
     this.flared = false
     this.autothrustIntegral = 0
     this.autothrustBase = this.physics.state.controls.throttle
+    this.autopilot.reset()
+    this.apActive = false
+    this.athrActive = false
+    resetAutopilot()
     this.renderState.teleportId++
     this.syncRenderState(1)
     this.publish()
@@ -173,6 +193,12 @@ export class FlightSession {
   dispose(): void {
     this.keyboard.releaseAll()
     resetTelemetry()
+    resetAutopilot()
+  }
+
+  /** Autopilot disconnections so far (each one sounds the disconnect warning). */
+  get apDisconnects(): number {
+    return this.apDisconnectCount
   }
 
   /** Completed lesson steps so far (0 outside Flight School). */
@@ -251,8 +277,102 @@ export class FlightSession {
     this.keyboard.setThrottle(controls.throttle)
   }
 
+  /**
+   * Autopilot and autothrust from the panel selections. Engaging is refused on
+   * (or just above) the ground; the stick keys, the throttle keys, a stall or
+   * touching down disconnect them, with the reason shown on the panel.
+   */
+  private applyAutopilot(controls: ControlInputs, dt: number): void {
+    const store = useAutopilotStore.getState()
+    const s = this.physics.state
+    let ap = store.ap
+    let athr = store.athr
+    let message = store.message
+    if (ap && !this.apActive && (s.onGround || s.heightAboveGround < AP_MIN_HEIGHT)) {
+      ap = false
+      message = 'AP needs 100 ft above the ground'
+    }
+    if (athr && !this.athrActive && s.onGround) {
+      athr = false
+      message = 'A/THR is not available on the ground'
+    }
+    if (ap && this.apActive) {
+      const reason =
+        Math.abs(controls.pitch) > PILOT_OVERRIDE || Math.abs(controls.roll) > PILOT_OVERRIDE
+          ? 'pilot input'
+          : s.onGround || s.crashed
+            ? 'on the ground'
+            : s.stalled
+              ? 'stall'
+              : null
+      if (reason) {
+        ap = false
+        message = `AP OFF: ${reason}`
+      }
+    }
+    if (athr && this.athrActive) {
+      if (Math.abs(controls.throttle - this.athrThrottle) > THROTTLE_OVERRIDE) {
+        athr = false
+        message = 'A/THR OFF: throttle moved'
+      } else if (s.onGround || s.crashed) {
+        athr = false
+        message = 'A/THR OFF: on the ground'
+      }
+    }
+    if (ap !== store.ap || athr !== store.athr || message !== store.message) {
+      useAutopilotStore.setState({ ap, athr, message })
+    }
+    if (this.apActive && !ap) {
+      this.apDisconnectCount++
+      clearDialed(['headingDeg', 'altitude', 'verticalSpeed'])
+    }
+    if (this.athrActive && !athr) clearDialed(['speed'])
+    this.apActive = ap
+    this.athrActive = athr
+
+    const out = this.autopilot.apply(s, { ap, athr, vertical: store.vertical, targets: store.targets }, controls, dt)
+    if (ap && (out.vertical !== store.vertical || out.annunciation !== store.annunciation)) {
+      useAutopilotStore.setState({ vertical: out.vertical, annunciation: out.annunciation })
+    }
+    if (athr) {
+      this.keyboard.setThrottle(controls.throttle)
+      this.athrThrottle = controls.throttle
+    }
+  }
+
+  /**
+   * Disengaged holds keep their target on what the aircraft is doing, so
+   * engaging holds the current speed, heading and altitude. A target the
+   * pilot has dialled stays put.
+   */
+  private syncAutopilotTargets(): void {
+    const store = useAutopilotStore.getState()
+    const s = this.physics.state
+    const current: AutopilotTargets = {
+      speed: s.airspeed,
+      headingDeg: s.headingDeg,
+      altitude: s.altitude,
+      verticalSpeed: s.verticalSpeed,
+    }
+    const following: Record<TargetField, boolean> = {
+      speed: !store.athr,
+      headingDeg: !store.ap,
+      altitude: !store.ap,
+      verticalSpeed: !store.ap || store.vertical !== 'VS',
+    }
+    let next: AutopilotTargets | null = null
+    for (const field of Object.keys(current) as TargetField[]) {
+      if (!following[field] || store.dialed[field]) continue
+      if (Math.abs(current[field] - store.targets[field]) < TARGET_SYNC_EPS[field]) continue
+      next ??= { ...store.targets }
+      next[field] = current[field]
+    }
+    if (next) useAutopilotStore.setState({ targets: next })
+  }
+
   private readonly stepOnce = (dt: number): void => {
     const controls = this.keyboard.update(dt)
+    this.applyAutopilot(controls, dt)
     this.applyFlareAssist(controls)
     // The tail-strike guard has the final say over pitch.
     if (this.assistsActive) this.applyTailStrikeGuard(controls)
@@ -293,6 +413,7 @@ export class FlightSession {
 
   private publish(): void {
     const s = this.physics.state
+    this.syncAutopilotTargets()
     publishTelemetry({
       airspeed: s.airspeed,
       groundSpeed: s.groundSpeed,

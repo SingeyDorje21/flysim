@@ -42,6 +42,7 @@ export function SimulationDriver({ session, audio }: { session: FlightSession; a
         teleportId: session.renderState.teleportId,
         frozen,
         lessonStep: session.lessonStep,
+        apDisconnects: session.apDisconnects,
       },
       delta,
     )

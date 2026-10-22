@@ -123,8 +123,8 @@ const FLARE_MODE_PATH = -1.5 * (Math.PI / 180)
  */
 const DEROTATION_RATE = 2.5 * (Math.PI / 180)
 /** Stick load-factor limits with the gear down (g). */
-const GEAR_DOWN_NZ_MAX = 2
-const GEAR_DOWN_NZ_MIN = 0
+export const GEAR_DOWN_NZ_MAX = 2
+export const GEAR_DOWN_NZ_MIN = 0
 const G_SETTLE = 0.08
 const ROLL_SETTLE_RATE = 0.03
 /** AoA lead gain as a fraction of the pitch bandwidth. */

@@ -31,6 +31,8 @@ export interface AudioFrame {
   frozen: boolean
   /** Flight School step counter (0 outside lessons); a change plays a chime. */
   lessonStep: number
+  /** Autopilot disconnect counter; a change sounds the disconnect warning. */
+  apDisconnects?: number
 }
 
 export interface SoundLevels {
@@ -59,6 +61,7 @@ export type SoundEvent =
   | { type: 'flaps' }
   | { type: 'throttle' }
   | { type: 'step' }
+  | { type: 'apOff' }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 
@@ -111,6 +114,7 @@ export class SoundEventDetector {
         }
         if (f.ringsPassed > prev.ringsPassed) events.push({ type: 'ring' })
         if (f.lessonStep > prev.lessonStep) events.push({ type: 'step' })
+        if ((f.apDisconnects ?? 0) > (prev.apDisconnects ?? 0)) events.push({ type: 'apOff' })
         if (f.flaps !== prev.flaps) events.push({ type: 'flaps' })
         // A detent click every 10% of throttle travel.
         const step = Math.round(f.throttle * 10)

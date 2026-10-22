@@ -195,6 +195,12 @@ function play(g: Graph, e: SoundEvent): void {
       tone(g, 'triangle', 660, 660, 0.12, 0.18)
       tone(g, 'triangle', 990, 990, 0.12, 0.3, 0.1)
       break
+    case 'apOff':
+      // Autopilot disconnect: a short descending three-note warning.
+      tone(g, 'square', 1175, 1175, 0.07, 0.14)
+      tone(g, 'square', 988, 988, 0.07, 0.14, 0.15)
+      tone(g, 'square', 784, 784, 0.07, 0.22, 0.3)
+      break
     case 'ring':
       tone(g, 'sine', 880, 880, 0.2, 0.25)
       tone(g, 'sine', 1320, 1320, 0.2, 0.4, 0.12)
