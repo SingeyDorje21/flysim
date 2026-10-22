@@ -1,5 +1,5 @@
 import { AIRPORTS } from '../config/airports'
-import { headingVector } from '../game/airportGeometry'
+import { airportRunways, headingVector, longestRunway } from '../game/airportGeometry'
 import { useTelemetry } from '../state/telemetry'
 
 export const MINIMAP_RANGE = 20000
@@ -22,7 +22,7 @@ export function Minimap() {
   const near = AIRPORTS.filter((a) => {
     const dx = a.center.x - t.position.x
     const dz = a.center.z - t.position.z
-    return Math.hypot(dx, dz) < MINIMAP_RANGE + a.runway.length
+    return Math.hypot(dx, dz) < MINIMAP_RANGE + longestRunway(a)
   })
   const north = toScreen(t.position.x, t.position.z - MINIMAP_RANGE * 0.88)
   return (
@@ -41,14 +41,16 @@ export function Minimap() {
       <g clipPath="url(#minimap-clip)">
         <circle r={R / 2} className="mm-ring" />
         {near.map((a) => {
-          const d = headingVector(a.runway.headingDeg)
-          const hl = a.runway.length / 2
-          const p1 = toScreen(a.center.x - d.x * hl, a.center.z - d.z * hl)
-          const p2 = toScreen(a.center.x + d.x * hl, a.center.z + d.z * hl)
           const c = toScreen(a.center.x, a.center.z)
           return (
             <g key={a.id} data-testid={`minimap-airport-${a.code}`}>
-              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} className="mm-runway" />
+              {airportRunways(a).map(({ rect: r, index }) => {
+                const d = headingVector(r.headingDeg)
+                const hl = r.length / 2
+                const p1 = toScreen(r.cx - d.x * hl, r.cz - d.z * hl)
+                const p2 = toScreen(r.cx + d.x * hl, r.cz + d.z * hl)
+                return <line key={index} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} className="mm-runway" />
+              })}
               <text x={c.x} y={c.y - 5} className="mm-label" textAnchor="middle">
                 {a.code}
               </text>

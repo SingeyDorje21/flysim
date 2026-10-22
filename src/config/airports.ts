@@ -4,7 +4,10 @@
  * suitable ground (and must report it); nothing else edits this data.
  *
  * World frame: +X east, +Z south, heading 0 = north (-Z), 90 = east (+X).
- * Each airport has one runway centred on `center`. `headingDeg` is the
+ * Each airport has a primary runway, `runways[0]`, centred on `center`; its
+ * taxiway, apron and buildings are laid out along it. The other runways are
+ * either parallel to it (designated L / R) or cross it at right angles, and
+ * are placed by an offset in the primary runway's frame. `headingDeg` is the
  * direction of the lower-numbered runway end (e.g. 90 for runway 09/27).
  */
 
@@ -15,6 +18,12 @@ export interface RunwayDef {
   headingDeg: number
   length: number
   width: number
+  /**
+   * Centre offset from the airport centre (m) in the primary runway's frame:
+   * along its heading and across to its right. Absent (0) for the primary.
+   */
+  along?: number
+  across?: number
 }
 
 export interface AirportDef {
@@ -23,11 +32,12 @@ export interface AirportDef {
   code: string
   name: string
   class: AirportClass
-  /** Runway centre, world x/z (m). */
+  /** Primary runway centre, world x/z (m). */
   center: { x: number; z: number }
   /** Flattened field elevation (m above sea level). */
   elevation: number
-  runway: RunwayDef
+  /** Primary runway first; secondary runways parallel to it or crossing it at 90 degrees. */
+  runways: readonly RunwayDef[]
 }
 
 export const AIRPORT_CLASS_LABEL: Record<AirportClass, string> = {
@@ -48,7 +58,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'short',
     center: { x: 0, z: 0 },
     elevation: 12,
-    runway: { headingDeg: 0, length: 1600, width: 30 },
+    runways: [
+      { headingDeg: 0, length: 1600, width: 30 },
+      { headingDeg: 90, length: 900, width: 23, along: 480, across: 0 },
+    ],
   },
   {
     id: 'harbor',
@@ -57,7 +70,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'international',
     center: { x: -31500, z: 11000 },
     elevation: 24,
-    runway: { headingDeg: 90, length: 3400, width: 60 },
+    runways: [
+      { headingDeg: 90, length: 3400, width: 60 },
+      { headingDeg: 90, length: 2900, width: 45, along: 0, across: -400 },
+    ],
   },
   {
     id: 'northbay',
@@ -66,7 +82,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'international',
     center: { x: 8000, z: -36250 },
     elevation: 31,
-    runway: { headingDeg: 90, length: 3200, width: 60 },
+    runways: [
+      { headingDeg: 90, length: 3200, width: 60 },
+      { headingDeg: 90, length: 2700, width: 45, along: 0, across: -400 },
+    ],
   },
   {
     id: 'ridgeback',
@@ -75,7 +94,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'military',
     center: { x: 29500, z: 500 },
     elevation: 113,
-    runway: { headingDeg: 90, length: 2800, width: 45 },
+    runways: [
+      { headingDeg: 90, length: 2800, width: 45 },
+      { headingDeg: 0, length: 2000, width: 45, along: 900, across: 0 },
+    ],
   },
   {
     id: 'westport',
@@ -84,7 +106,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'regional',
     center: { x: -35500, z: -1750 },
     elevation: 40,
-    runway: { headingDeg: 0, length: 2200, width: 45 },
+    runways: [
+      { headingDeg: 0, length: 2200, width: 45 },
+      { headingDeg: 90, length: 1600, width: 30, along: -750, across: 0 },
+    ],
   },
   {
     id: 'southgate',
@@ -93,7 +118,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'regional',
     center: { x: -7000, z: 30000 },
     elevation: 31,
-    runway: { headingDeg: 90, length: 2200, width: 45 },
+    runways: [
+      { headingDeg: 90, length: 2200, width: 45 },
+      { headingDeg: 0, length: 1600, width: 30, along: -750, across: 0 },
+    ],
   },
   {
     id: 'eastshore',
@@ -102,7 +130,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'regional',
     center: { x: 32000, z: 10750 },
     elevation: 63,
-    runway: { headingDeg: 0, length: 2200, width: 45 },
+    runways: [
+      { headingDeg: 0, length: 2200, width: 45 },
+      { headingDeg: 90, length: 1600, width: 30, along: -750, across: 0 },
+    ],
   },
   {
     id: 'pineridge',
@@ -111,7 +142,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'short',
     center: { x: -3750, z: -30500 },
     elevation: 268,
-    runway: { headingDeg: 0, length: 1600, width: 30 },
+    runways: [
+      { headingDeg: 0, length: 1600, width: 30 },
+      { headingDeg: 90, length: 900, width: 23, along: -480, across: 0 },
+    ],
   },
   {
     id: 'gull',
@@ -120,7 +154,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'short',
     center: { x: -41000, z: -40000 },
     elevation: 37,
-    runway: { headingDeg: 0, length: 1600, width: 30 },
+    runways: [
+      { headingDeg: 0, length: 1600, width: 30 },
+      { headingDeg: 90, length: 900, width: 23, along: 480, across: 0 },
+    ],
   },
   {
     id: 'cedar',
@@ -129,7 +166,10 @@ export const AIRPORTS: readonly AirportDef[] = [
     class: 'short',
     center: { x: -33250, z: -17000 },
     elevation: 43,
-    runway: { headingDeg: 0, length: 1600, width: 30 },
+    runways: [
+      { headingDeg: 0, length: 1600, width: 30 },
+      { headingDeg: 90, length: 900, width: 23, along: 480, across: 0 },
+    ],
   },
 ]
 

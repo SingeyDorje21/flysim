@@ -1,7 +1,7 @@
 /**
  * Terrain-side view of every airport (pure TS, no three.js): the flattened
- * plateau, the smooth blend around it and the approach surfaces of both
- * runway ends, precomputed once from the AIRPORTS / airportLayout contract so
+ * plateau (the union of its flat zones), the smooth blend around it and the
+ * approach surfaces at both ends of every runway, precomputed once from the AIRPORTS / airportLayout contract so
  * the hot height function does a few multiplications per nearby airport and a
  * bounding-box test for every other one.
  *
@@ -11,7 +11,7 @@
 
 import { AIRPORTS, type AirportClass, type AirportDef } from '../../config/airports'
 import { WORLD } from '../../config/world'
-import { airportLayout, isPavedAt as layoutIsPavedAt } from '../../game/airportGeometry'
+import { airportLayout, isPavedAt as layoutIsPavedAt, type OrientedRect } from '../../game/airportGeometry'
 
 /** Constraints are enforced on their region grown by this much, so every grid cell touching it obeys them. */
 export const PAD = 2 * WORLD.physicsGridStep
@@ -45,28 +45,29 @@ export interface Box {
   maxZ: number
 }
 
-export interface AirportSite {
-  def: AirportDef
-  elevation: number
-  blend: number
-  /** Runway frame: centre, heading unit vector, half length. */
+/** A rectangle in site form: centre, heading unit vector, half extents along and across it. */
+export interface SiteRect {
   cx: number
   cz: number
   dx: number
   dz: number
-  runwayHalf: number
-  /** flatZone frame: centre, heading unit vector, contract half extents (no margin). */
-  fcx: number
-  fcz: number
-  fdx: number
-  fdz: number
-  flatHalfL: number
-  flatHalfW: number
-  /** Everything the airport touches: plateau, blend and both approach surfaces with their fade. */
+  halfL: number
+  halfW: number
+}
+
+export interface AirportSite {
+  def: AirportDef
+  elevation: number
+  blend: number
+  /** One per runway: its frame (halfW unused), for the approach surfaces at both ends. */
+  runways: SiteRect[]
+  /** The contract flat zones (no margin): the plateau is their union. */
+  flats: SiteRect[]
+  /** Everything the airport touches: plateau, blend and every approach surface with its fade. */
   box: Box
   /** Plateau plus margin, pad and blend. */
   flatBox: Box
-  /** The contract flatZone (where paved surfaces may be). */
+  /** The contract flat zones (where paved surfaces may be). */
   pavedBox: Box
 }
 
@@ -91,42 +92,32 @@ function heading(deg: number): { x: number; z: number } {
   return { x: Math.sin(r), z: -Math.cos(r) }
 }
 
+function siteRect(r: OrientedRect): SiteRect {
+  const d = heading(r.headingDeg)
+  return { cx: r.cx, cz: r.cz, dx: d.x, dz: d.z, halfL: r.length / 2, halfW: r.width / 2 }
+}
+
+const rectBox = (r: SiteRect, growL: number, growW: number) => orientedBox(r.cx, r.cz, r.dx, r.dz, r.halfL + growL, r.halfW + growW)
+
 export function buildSite(a: AirportDef): AirportSite {
-  const fz = airportLayout(a).flatZone
-  const d = heading(a.runway.headingDeg)
-  const fd = heading(fz.headingDeg)
+  const layout = airportLayout(a)
+  const flats = layout.flatZones.map(siteRect)
+  const runways = layout.runways.map(siteRect)
   const blend = AIRPORT_BLEND_BY_CLASS[a.class]
-  const runwayHalf = a.runway.length / 2
-  const flatHalfL = fz.length / 2
-  const flatHalfW = fz.width / 2
-  const g = FLAT_MARGIN + PAD
-  const flatBox = orientedBox(fz.cx, fz.cz, fd.x, fd.z, flatHalfL + g + blend + 10, flatHalfW + g + blend + 10)
-  const approachBox = orientedBox(
-    a.center.x,
-    a.center.z,
-    d.x,
-    d.z,
-    runwayHalf + APPROACH_LENGTH + PAD + APPROACH_FADE + 10,
-    APPROACH_HALF_WIDTH + PAD + APPROACH_FADE + 10,
-  )
+  const g = FLAT_MARGIN + PAD + blend + 10
+  const flatBox = flats.map((f) => rectBox(f, g, g)).reduce(union)
+  const approachBox = runways
+    .map((r) => orientedBox(r.cx, r.cz, r.dx, r.dz, r.halfL + APPROACH_LENGTH + PAD + APPROACH_FADE + 10, APPROACH_HALF_WIDTH + PAD + APPROACH_FADE + 10))
+    .reduce(union)
   return {
     def: a,
     elevation: a.elevation,
     blend,
-    cx: a.center.x,
-    cz: a.center.z,
-    dx: d.x,
-    dz: d.z,
-    runwayHalf,
-    fcx: fz.cx,
-    fcz: fz.cz,
-    fdx: fd.x,
-    fdz: fd.z,
-    flatHalfL,
-    flatHalfW,
+    runways,
+    flats,
     box: union(flatBox, approachBox),
     flatBox,
-    pavedBox: orientedBox(fz.cx, fz.cz, fd.x, fd.z, flatHalfL + 1, flatHalfW + 1),
+    pavedBox: flats.map((f) => rectBox(f, 1, 1)).reduce(union),
   }
 }
 

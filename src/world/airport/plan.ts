@@ -1,12 +1,24 @@
 /**
  * Pure render plan for one airport (no three.js). Everything is expressed in
- * the airport's local frame: origin = runway centre at field elevation,
- * x = across (right of the runway heading), z = -along (so heading 0 is -Z,
- * exactly like the world). The renderer rotates the group by -headingDeg.
+ * the airport's local frame: origin = primary runway centre at field
+ * elevation, x = across (right of its heading), z = -along (so heading 0 is
+ * -Z, exactly like the world). The renderer rotates the group by -headingDeg.
+ * Each runway's markings and lights are built in that runway's own frame and
+ * mapped into the airport frame (other runways are parallel or at 90 degrees,
+ * so axis-aligned quads stay axis-aligned).
  */
 
 import type { AirportDef } from '../../config/airports'
-import { airportLayout, headingVector, runwayEnds, runwayRect, toLocal, type OrientedRect } from '../../game/airportGeometry'
+import {
+  airportFrame,
+  airportLayout,
+  airportRunways,
+  endsOf,
+  headingVector,
+  toLocal,
+  type OrientedRect,
+  type Runway,
+} from '../../game/airportGeometry'
 
 export type Rgb = readonly [number, number, number]
 
@@ -107,7 +119,7 @@ export interface AirportPlan {
 
 /** Local frame -> world x/z for an airport. */
 export function planToWorld(a: AirportDef, x: number, z: number): { x: number; z: number } {
-  const d = headingVector(a.runway.headingDeg)
+  const d = headingVector(airportFrame(a).headingDeg)
   const right = { x: -d.z, z: d.x }
   const along = -z
   return { x: a.center.x + d.x * along + right.x * x, z: a.center.z + d.z * along + right.z * x }
@@ -148,10 +160,39 @@ function pushKeys(out: MarkingQuad[], width: number, thrAlong: number, u: number
   }
 }
 
-function buildMarkings(a: AirportDef, out: MarkingQuad[], designators: DesignatorPlacement[]): void {
-  const { length: L, width: W } = a.runway
-  const ends = runwayEnds(a)
-  const rr = runwayRect(a)
+/**
+ * Maps a runway's own local frame (x across, z = -along, origin its centre)
+ * into the airport frame `base`: points, axis-aligned quads (extents swap at
+ * 90 degrees) and rotations about Y.
+ */
+interface FrameMap {
+  point(x: number, z: number): { x: number; z: number }
+  quad(q: MarkingQuad): MarkingQuad
+  /** Rotation about Y to add (rad), as the renderer turns patches by -relHeadingDeg. */
+  rotY: number
+}
+
+function frameMap(base: OrientedRect, rw: OrientedRect): FrameMap {
+  const rel = (((rw.headingDeg - base.headingDeg) % 360) + 360) % 360
+  if (rel % 90 !== 0) throw new Error(`runway at ${rel} degrees to the primary: only parallel or crossing at 90 is supported`)
+  const d = headingVector(rw.headingDeg)
+  const point = (x: number, z: number) => {
+    const along = -z
+    const p = toLocal(base, rw.cx + d.x * along - d.z * x, rw.cz + d.z * along + d.x * x)
+    return { x: p.across, z: -p.along }
+  }
+  const swap = rel % 180 !== 0
+  return {
+    point,
+    quad: (q) => ({ ...q, ...point(q.x, q.z), width: swap ? q.length : q.width, length: swap ? q.width : q.length }),
+    rotY: (-rel * Math.PI) / 180,
+  }
+}
+
+function buildMarkings(rw: Runway, out: MarkingQuad[], designators: DesignatorPlacement[]): void {
+  const { length: L, width: W } = rw.def
+  const ends = endsOf(rw)
+  const rr = rw.rect
   // edge lines
   const edgeX = W / 2 - 0.9
   out.push({ x: -edgeX, z: 0, width: 0.45, length: L - 4, y: Y_MARK, color: WHITE })
@@ -215,11 +256,10 @@ function buildMarkings(a: AirportDef, out: MarkingQuad[], designators: Designato
   }
 }
 
-function buildLights(a: AirportDef, lights: LightPlacement[], papi: PapiPlan[]): void {
-  const { length: L, width: W } = a.runway
-  const ends = runwayEnds(a)
-  const rr = runwayRect(a)
-  const lay = airportLayout(a)
+function buildRunwayLights(rw: Runway, lights: LightPlacement[], papi: PapiPlan[]): void {
+  const { length: L, width: W } = rw.def
+  const ends = endsOf(rw)
+  const rr = rw.rect
   // edge lights every 60 m
   const n = Math.floor(L / 60)
   for (let i = 0; i <= n; i++) {
@@ -242,12 +282,20 @@ function buildLights(a: AirportDef, lights: LightPlacement[], papi: PapiPlan[]):
     const cx = plights.reduce((s, p) => s + p.x, 0) / 4
     papi.push({ designator: e.designator, lights: plights, cx, cz: -aim.along })
   }
-  // blue taxiway edge lights every 80 m, skipping connector crossings
+}
+
+function buildTaxiwayLights(a: AirportDef, lights: LightPlacement[]): void {
+  const lay = airportLayout(a)
+  const rr = airportFrame(a)
+  // blue taxiway edge lights every 80 m, skipping connector and runway crossings
   const tw = lay.taxiway
   const t = rectLocal(rr, tw)
-  const conns = lay.connectors.map((c) => -rectLocal(rr, c).z)
+  // Things that cross the taxiway: its connectors, and any runway crossing it at 90 degrees.
+  const crossing = [...lay.connectors, ...lay.runways.slice(1)]
+    .filter((r) => Math.abs(rectLocal(rr, r).x - t.x) <= r.length / 2)
+    .map((r) => ({ along: -rectLocal(rr, r).z, half: r.width / 2 }))
   for (let along = -tw.length / 2 + 20; along <= tw.length / 2 - 20; along += 80) {
-    if (conns.some((c) => Math.abs(c - along) < tw.width / 2 + 6)) continue
+    if (crossing.some((c) => Math.abs(c.along - along) < c.half + 6)) continue
     for (const side of [-1, 1]) lights.push({ x: t.x + side * (tw.width / 2 + 1), z: -along, y: 0.3, color: 'blue' })
   }
 }
@@ -261,7 +309,7 @@ const TOWER: Rgb = [0.78, 0.78, 0.76]
 
 function buildBuildings(a: AirportDef, out: BuildingPlacement[]): void {
   const lay = airportLayout(a)
-  const rr = runwayRect(a)
+  const rr = airportFrame(a)
   const ap = toLocal(rr, lay.apron.cx, lay.apron.cz)
   const apronFar = ap.across + lay.apron.width / 2
   const apronAlong = ap.along
@@ -325,8 +373,8 @@ function buildBuildings(a: AirportDef, out: BuildingPlacement[]): void {
 /** Everything needed to draw one airport, in its local frame. Pure. */
 export function buildAirportPlan(a: AirportDef): AirportPlan {
   const lay = airportLayout(a)
-  const rr = runwayRect(a)
-  const h = a.runway.headingDeg
+  const rr = airportFrame(a)
+  const h = rr.headingDeg
   const pav = (kind: PavementPatch['kind'], r: OrientedRect, y: number, color: Rgb): PavementPatch => {
     const p = rectLocal(rr, r)
     return { kind, x: p.x, z: p.z, relHeadingDeg: r.headingDeg - h, width: r.width, length: r.length, y, color }
@@ -335,11 +383,30 @@ export function buildAirportPlan(a: AirportDef): AirportPlan {
     pav('apron', lay.apron, Y_APRON, [0.3, 0.3, 0.31]),
     pav('taxiway', lay.taxiway, Y_TAXI, [0.2, 0.2, 0.21]),
     ...lay.connectors.map((c) => pav('connector', c, Y_CONNECTOR, [0.2, 0.2, 0.21])),
-    pav('runway', lay.runway, Y_RUNWAY, [0.13, 0.13, 0.14]),
+    ...lay.runways.map((r) => pav('runway', r, Y_RUNWAY, [0.13, 0.13, 0.14])),
   ]
   const markings: MarkingQuad[] = []
   const designators: DesignatorPlacement[] = []
-  buildMarkings(a, markings, designators)
+  const lights: LightPlacement[] = []
+  const papi: PapiPlan[] = []
+  for (const rw of airportRunways(a)) {
+    // Built in the runway's own frame, then mapped into the airport frame.
+    const m = frameMap(rr, rw.rect)
+    const rm: MarkingQuad[] = []
+    const rd: DesignatorPlacement[] = []
+    const rl: LightPlacement[] = []
+    const rp: PapiPlan[] = []
+    buildMarkings(rw, rm, rd)
+    buildRunwayLights(rw, rl, rp)
+    for (const q of rm) markings.push(m.quad(q))
+    for (const d of rd) designators.push({ ...d, ...m.point(d.x, d.z), rotY: d.rotY + m.rotY })
+    for (const l of rl) lights.push({ ...l, ...m.point(l.x, l.z) })
+    for (const p of rp) {
+      const c = m.point(p.cx, p.cz)
+      papi.push({ designator: p.designator, lights: p.lights.map((l) => m.point(l.x, l.z)), cx: c.x, cz: c.z })
+    }
+  }
+  buildTaxiwayLights(a, lights)
   // yellow taxi centrelines
   for (const r of [lay.taxiway, ...lay.connectors]) {
     const p = rectLocal(rr, r)
@@ -354,11 +421,8 @@ export function buildAirportPlan(a: AirportDef): AirportPlan {
       color: YELLOW,
     })
   }
-  const lights: LightPlacement[] = []
-  const papi: PapiPlan[] = []
-  buildLights(a, lights, papi)
   const buildings: BuildingPlacement[] = []
   buildBuildings(a, buildings)
-  const windsock = { x: -(a.runway.width / 2 + 70), z: a.runway.length / 2 - 250 }
+  const windsock = { x: -(rr.width / 2 + 70), z: rr.length / 2 - 250 }
   return { airport: a, pavement, markings, designators, lights, papi, buildings, windsock }
 }

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { AIRPORTS } from '../config/airports'
 import { WORLD } from '../config/world'
-import { headingVector, runwayEnds } from '../game/airportGeometry'
+import { airportRunways, headingVector, longestRunway, runwayEnds } from '../game/airportGeometry'
 import { useGameStore } from '../state/gameStore'
 import { useTelemetry } from '../state/telemetry'
 import { formatDistance } from './format'
@@ -46,10 +46,8 @@ export function MapView({ idPrefix = 'map', inline = false, canSelect, minRunway
         ))}
       </g>
       {AIRPORTS.map((a) => {
-        const d = headingVector(a.runway.headingDeg)
-        const hl = a.runway.length / 2
         const active = a.id === airportId
-        const short = a.runway.length < minRunway
+        const short = longestRunway(a) < minRunway
         const end = active ? chosenEnd(a) : undefined
         const cls = ['map-airport', active ? 'active' : '', short ? 'short' : ''].filter(Boolean).join(' ')
         return (
@@ -64,14 +62,21 @@ export function MapView({ idPrefix = 'map', inline = false, canSelect, minRunway
           >
             <circle cx={a.center.x} cy={a.center.z} r={1500} className="map-hit" />
             {active && <circle cx={a.center.x} cy={a.center.z} r={1900} className="map-ring" />}
-            <line
-              x1={a.center.x - d.x * hl}
-              y1={a.center.z - d.z * hl}
-              x2={a.center.x + d.x * hl}
-              y2={a.center.z + d.z * hl}
-              className="map-runway"
-              strokeWidth={380}
-            />
+            {airportRunways(a).map(({ rect: r, index }) => {
+              const d = headingVector(r.headingDeg)
+              const hl = r.length / 2
+              return (
+                <line
+                  key={index}
+                  x1={r.cx - d.x * hl}
+                  y1={r.cz - d.z * hl}
+                  x2={r.cx + d.x * hl}
+                  y2={r.cz + d.z * hl}
+                  className="map-runway"
+                  strokeWidth={index === 0 ? 380 : 260}
+                />
+              )
+            })}
             {end && (
               <g
                 data-testid={`${idPrefix}-approach-arrow`}

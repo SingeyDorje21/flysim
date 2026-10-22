@@ -160,7 +160,7 @@ describe('coach view', () => {
     for (const id of AIRCRAFT_IDS) {
       const t = techniqueFor(id)
       const end = getRunwayEnd(t.lessonPlace.airportId, t.lessonPlace.runwayEnd)
-      expect(end.airport.runway.length, id).toBeGreaterThanOrEqual(Math.min(2600, t.rotateSpeed * 25))
+      expect(end.runway.def.length, id).toBeGreaterThanOrEqual(Math.min(2600, t.rotateSpeed * 25))
     }
   })
 })

@@ -4,9 +4,18 @@
  */
 
 import { getAircraft, type AircraftId } from '../config/aircraftCatalog'
-import { getAirport } from '../config/airports'
 import type { AircraftState } from '../simulation/types'
-import { getRunwayEnd, inRect, runwayAt, runwayRect, toLocal, type OrientedRect, type RunwayEnd } from './airportGeometry'
+import {
+  endsOf,
+  getRunwayEnd,
+  inRect,
+  nearestAirport,
+  runwayAt,
+  toLocal,
+  type OrientedRect,
+  type Runway,
+  type RunwayEnd,
+} from './airportGeometry'
 import { LessonChallenge } from './lessons'
 import { getModeInfo } from './modes'
 import { HOME_PLACE, spawnFor, type FlightPlace } from './spawns'
@@ -129,10 +138,53 @@ abstract class BaseChallenge implements Challenge {
   }
 }
 
+/** Where a touchdown happened, other than the runway the flight was cleared for. */
+type TouchdownPlace = { kind: 'target' } | { kind: 'runway'; end: RunwayEnd } | { kind: 'field' }
+
+/** Score fractions for a safe landing somewhere else, and the penalty for leaving the runway after touchdown. */
+const OTHER_RUNWAY_FACTOR = 0.7
+const OTHER_AIRPORT_FACTOR = 0.6
+const OFF_FIELD_FACTOR = 0.5
+const EXCURSION_PENALTY = 300
+
+/** The end in use of a runway, judged from the aircraft's heading. */
+function endInUse(rw: Runway, headingDeg: number): RunwayEnd {
+  const [lo, hi] = endsOf(rw)
+  const off = (e: RunwayEnd) => Math.abs(((headingDeg - e.headingDeg + 540) % 360) - 180)
+  return off(lo) <= off(hi) ? lo : hi
+}
+
+function touchdownPlace(x: number, z: number, headingDeg: number): TouchdownPlace {
+  const rw = runwayAt(x, z)
+  return rw ? { kind: 'runway', end: endInUse(rw, headingDeg) } : { kind: 'field' }
+}
+
+/**
+ * Free flight has no goal, but notices a landing: on a runway, or anywhere
+ * on open land, once the aircraft has rolled to a stop.
+ */
 class FreeFlightChallenge extends BaseChallenge {
-  protected evaluate(): void {}
+  private airborne = false
+  private landedAt: string | null = null
+
+  protected evaluate(state: AircraftState): void {
+    if (!state.onGround) {
+      if (state.heightAboveGround > 5) {
+        this.airborne = true
+        this.landedAt = null
+      }
+      return
+    }
+    if (!this.airborne || state.groundSpeed > STOPPED_SPEED) return
+    const { x, z } = state.position
+    const place = touchdownPlace(x, z, state.headingDeg)
+    if (place.kind === 'runway') this.landedAt = `Landed on runway ${place.end.designator} at ${place.end.airport.code}`
+    else this.landedAt = `Landed in the open, ${nearestAirport(x, z).airport.code} is the nearest airport`
+  }
+
   protected describe(): Description {
-    return { objective: 'Free flight', detail: 'Explore the island - Esc to pause or quit', fraction: null }
+    if (this.landedAt) return { objective: this.landedAt, detail: 'Full power (R) to take off again', fraction: null }
+    return { objective: 'Free flight', detail: 'Explore the island - land anywhere on open ground - Esc to pause or quit', fraction: null }
   }
 }
 
@@ -151,7 +203,7 @@ class TakeoffChallenge extends BaseChallenge {
 
   constructor(place: FlightPlace, aircraftId: AircraftId) {
     super('takeoff')
-    this.rect = runwayRect(getAirport(place.airportId))
+    this.rect = getRunwayEnd(place.airportId, place.runwayEnd).runway.rect
     const start = spawnFor('takeoff', place, aircraftId).position
     this.startAlong = this.along(start.x, start.z)
     this.rotateKt = Math.round(getAircraft(aircraftId).speeds.rotate / KNOT)
@@ -224,11 +276,13 @@ class TakeoffChallenge extends BaseChallenge {
 }
 
 class LandingChallenge extends BaseChallenge {
-  private touchdown: { sink: number; x: number; z: number; speed: number } | null = null
+  private touchdown: { sink: number; x: number; z: number; speed: number; on: TouchdownPlace } | null = null
   private prevVerticalSpeed = 0
   private stoppedFor = 0
   private distToAim = 0
   private groundSpeed = 0
+  /** Rolled off the cleared runway after touching down on it. */
+  private excursion = false
   private readonly end: RunwayEnd
   private readonly rect: OrientedRect
   private readonly startDist: number
@@ -236,7 +290,7 @@ class LandingChallenge extends BaseChallenge {
   constructor(place: FlightPlace, aircraftId: AircraftId) {
     super('landing')
     this.end = getRunwayEnd(place.airportId, place.runwayEnd)
-    this.rect = runwayRect(this.end.airport)
+    this.rect = this.end.runway.rect
     const start = spawnFor('landing', place, aircraftId).position
     this.startDist = Math.hypot(start.x - this.end.aimPoint.x, start.z - this.end.aimPoint.z)
   }
@@ -251,41 +305,67 @@ class LandingChallenge extends BaseChallenge {
     if (!this.touchdown) {
       this.distToAim = Math.hypot(x - this.end.aimPoint.x, z - this.end.aimPoint.z)
       if (state.onGround) {
-        this.touchdown = { sink: Math.max(0, -this.prevVerticalSpeed), x, z, speed: state.airspeed }
-        if (!this.onTargetRunway(x, z)) {
-          const other = runwayAt(x, z)
-          if (other) this.fail('Wrong airport', `You landed at ${other.name}, not ${this.end.airport.name}`)
-          else this.fail('Missed the runway', 'You touched down off the paved runway')
+        // Anywhere on land counts as a landing (water is a crash); the cleared runway scores best.
+        this.touchdown = {
+          sink: Math.max(0, -this.prevVerticalSpeed),
+          x,
+          z,
+          speed: state.airspeed,
+          on: this.onTargetRunway(x, z) ? { kind: 'target' } : touchdownPlace(x, z, state.headingDeg),
         }
       }
       this.prevVerticalSpeed = state.verticalSpeed
       return
     }
-    if (state.onGround && !this.onTargetRunway(x, z)) {
-      this.fail('Runway excursion', 'You rolled off the runway')
-      return
-    }
+    if (this.touchdown.on.kind === 'target' && state.onGround && !this.onTargetRunway(x, z)) this.excursion = true
     this.stoppedFor = state.onGround && state.groundSpeed < STOPPED_SPEED ? this.stoppedFor + dt : 0
     if (this.stoppedFor >= 0.5) this.finish(x, z)
   }
 
   private finish(stopX: number, stopZ: number): void {
     const td = this.touchdown!
+    const rollout = Math.hypot(stopX - td.x, stopZ - td.z)
+    const common: ResultStat[] = [
+      { label: 'Touchdown sink rate', value: -td.sink, kind: 'verticalSpeed' },
+      { label: 'Touchdown speed', value: td.speed, kind: 'speed' },
+    ]
+    const sinkPenalty = Math.max(0, td.sink - 0.8) * 180
+    const hard = td.sink > 3 ? 'Hard touchdown' : null
+    if (td.on.kind !== 'target') {
+      // Safe but not where you were cleared to land: a fraction of the touchdown score.
+      const p = td.on
+      const base = 1000 - sinkPenalty
+      const cleared = `${this.end.airport.code} ${this.end.designator}`
+      if (p.kind === 'field') {
+        this.succeed('Field landing', hard ?? `Safe, but off the runway (cleared for ${cleared})`, base * OFF_FIELD_FACTOR, [
+          ...common,
+          { label: 'Distance from the runway', value: Math.hypot(td.x - this.end.aimPoint.x, td.z - this.end.aimPoint.z), kind: 'distance' },
+          { label: 'Rollout', value: rollout, kind: 'distance' },
+        ])
+      } else {
+        const sameAirport = p.end.airport.id === this.end.airport.id
+        this.succeed(
+          sameAirport ? `Landed on runway ${p.end.designator}` : `Diverted to ${p.end.airport.name}`,
+          hard ?? `You were cleared for ${cleared}`,
+          base * (sameAirport ? OTHER_RUNWAY_FACTOR : OTHER_AIRPORT_FACTOR),
+          [...common, { label: 'Rollout', value: rollout, kind: 'distance' }],
+        )
+      }
+      return
+    }
     const tdLocal = toLocal(this.rect, td.x, td.z)
     const aimLocal = toLocal(this.rect, this.end.aimPoint.x, this.end.aimPoint.z)
     const centreOffset = Math.abs(tdLocal.across)
     const aimError = Math.abs(tdLocal.along - aimLocal.along)
-    const rollout = Math.abs(toLocal(this.rect, stopX, stopZ).along - tdLocal.along)
-    let score = 1000
-    score -= Math.max(0, td.sink - 0.8) * 180
+    let score = 1000 - sinkPenalty
     score -= Math.max(0, centreOffset - 2) * 20
     score -= Math.max(0, aimError - 120) * 0.6
     score -= Math.max(0, rollout - 900) * 0.3
+    if (this.excursion) score -= EXCURSION_PENALTY
     const s = finalScore(score)
     const headline = td.sink < 1 && s >= 850 ? 'Butter! Perfect landing' : s >= 650 ? 'Nice landing' : 'Landed - a bit firm'
-    this.succeed(headline, td.sink > 3 ? 'Hard touchdown' : null, score, [
-      { label: 'Touchdown sink rate', value: -td.sink, kind: 'verticalSpeed' },
-      { label: 'Touchdown speed', value: td.speed, kind: 'speed' },
+    this.succeed(headline, this.excursion ? 'You rolled off the runway' : hard, score, [
+      ...common,
       { label: 'Centreline offset', value: centreOffset, kind: 'distance' },
       { label: 'Distance from aim point', value: aimError, kind: 'distance' },
       { label: 'Rollout', value: rollout, kind: 'distance' },
@@ -302,7 +382,7 @@ class LandingChallenge extends BaseChallenge {
     }
     return {
       objective: 'Brake to a full stop (hold B)',
-      detail: 'Stay on the runway',
+      detail: this.touchdown.on.kind === 'target' ? 'Stay on the runway' : 'Keep it straight and slow down',
       fraction: this.touchdown.speed > 0 ? 1 - this.groundSpeed / this.touchdown.speed : 1,
     }
   }

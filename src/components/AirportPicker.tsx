@@ -1,6 +1,6 @@
 import { getAircraft } from '../config/aircraftCatalog'
 import { AIRPORTS, AIRPORT_CLASS_LABEL, getAirport } from '../config/airports'
-import { runwayEnds } from '../game/airportGeometry'
+import { airportRunways, endsOf, longestRunway, runwayEnds } from '../game/airportGeometry'
 import { useGameStore } from '../state/gameStore'
 import { formatDistance, formatRunwayLength, shortAircraftName } from './format'
 import { MapPreview } from './WorldMap'
@@ -29,9 +29,12 @@ export function AirportPicker() {
       <MapPreview minRunway={aircraft.minRunway} />
       <div className="airport-list" role="radiogroup" aria-label="Airport">
         {AIRPORTS.map((a) => {
-          const [a1, a2] = runwayEnds(a)
+          const longest = longestRunway(a)
+          const pairs = airportRunways(a)
+            .map((rw) => endsOf(rw).map((e) => e.designator).join('/'))
+            .join(', ')
           const active = a.id === airportId
-          const short = a.runway.length < aircraft.minRunway
+          const short = longest < aircraft.minRunway
           return (
             <button
               key={a.id}
@@ -45,11 +48,11 @@ export function AirportPicker() {
               <span className="airport-code">{a.code}</span>
               <span className="airport-name">{a.name}</span>
               <span className="airport-meta">
-                {AIRPORT_CLASS_LABEL[a.class]} · RWY {a1.designator}/{a2.designator} · {formatDistance(a.runway.length, units)}
+                {AIRPORT_CLASS_LABEL[a.class]} · RWY {pairs} · {formatDistance(longest, units)}
               </span>
               {short && (
                 <span className="runway-warning" data-testid={`runway-warning-${a.code}`}>
-                  Runway {formatRunwayLength(a.runway.length, units)} — {shortAircraftName(aircraft.name)} needs{' '}
+                  Runway {formatRunwayLength(longest, units)} — {shortAircraftName(aircraft.name)} needs{' '}
                   {formatRunwayLength(aircraft.minRunway, units)}
                 </span>
               )}
@@ -61,19 +64,24 @@ export function AirportPicker() {
       <div className="field">
         <span className="field-label">Runway end</span>
         <div className="seg" role="radiogroup" aria-label="Runway end">
-          {ends.map((e) => (
-            <button
-              key={e.designator}
-              type="button"
-              role="radio"
-              aria-checked={e.designator === runwayEnd}
-              aria-label={`Runway ${e.designator}`}
-              className={e.designator === runwayEnd ? 'seg-btn active' : 'seg-btn'}
-              onClick={() => selectAirport(airportId, e.designator)}
-            >
-              {e.designator}
-            </button>
-          ))}
+          {ends.map((e) => {
+            const length = e.runway.def.length
+            const cls = ['seg-btn', e.designator === runwayEnd ? 'active' : '', length < aircraft.minRunway ? 'short' : '']
+            return (
+              <button
+                key={e.designator}
+                type="button"
+                role="radio"
+                aria-checked={e.designator === runwayEnd}
+                aria-label={`Runway ${e.designator}`}
+                title={formatRunwayLength(length, units)}
+                className={cls.filter(Boolean).join(' ')}
+                onClick={() => selectAirport(airportId, e.designator)}
+              >
+                {e.designator}
+              </button>
+            )
+          })}
         </div>
       </div>
     </section>

@@ -12,7 +12,8 @@ describe('airport render plan', () => {
       expect(p.pavement.length).toBeGreaterThanOrEqual(6)
       expect(p.markings.length).toBeGreaterThan(20)
       expect(p.lights.length).toBeGreaterThan(20)
-      expect(p.papi).toHaveLength(2)
+      // A PAPI bar at each end of every runway.
+      expect(p.papi).toHaveLength(2 * a.runways.length)
       p.papi.forEach((x) => expect(x.lights).toHaveLength(4))
       expect(p.buildings.length).toBeGreaterThan(0)
     }
@@ -44,7 +45,7 @@ describe('airport render plan', () => {
         expect(Math.abs(along)).toBeLessThan(0.01)
         const hr = (ends[i].headingDeg * Math.PI) / 180
         const rightOffset = (w.x - aim.x) * Math.cos(hr) + (w.z - aim.z) * Math.sin(hr)
-        expect(rightOffset).toBeLessThan(-a.runway.width / 2)
+        expect(rightOffset).toBeLessThan(-ends[i].runway.def.width / 2)
       })
     }
   })
@@ -68,7 +69,7 @@ describe('airport render plan', () => {
             const x = b.x + (i / 2 - 1) * (b.width / 2)
             const z = b.z + (j / 2 - 1) * (b.depth / 2)
             const w = planToWorld(a, x, z)
-            expect(inRect(lay.flatZone, w.x, w.z), `${a.id} ${b.kind} in flatZone`).toBe(true)
+            expect(inRect(lay.flatZones[0], w.x, w.z), `${a.id} ${b.kind} in flatZone`).toBe(true)
             for (const r of lay.paved) expect(inRect(r, w.x, w.z), `${a.id} ${b.kind} off pavement`).toBe(false)
           }
         }

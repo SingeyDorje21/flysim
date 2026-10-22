@@ -51,19 +51,21 @@ export function treesExcludedAt(x: number, z: number): boolean {
   for (let i = 0; i < AIRPORT_SITES.length; i++) {
     const s = AIRPORT_SITES[i]
     if (!inBox(s.box, x, z)) continue
-    // Flat zone (plus margin and half the blend).
-    const fx = x - s.fcx
-    const fz = z - s.fcz
+    // Flat zones (plus margin and half the blend).
     const grow = FLAT_MARGIN + s.blend * 0.5
-    if (Math.abs(fx * s.fdx + fz * s.fdz) <= s.flatHalfL + grow && Math.abs(fz * s.fdx - fx * s.fdz) <= s.flatHalfW + grow) {
-      return true
+    for (const f of s.flats) {
+      const fx = x - f.cx
+      const fz = z - f.cz
+      if (Math.abs(fx * f.dx + fz * f.dz) <= f.halfL + grow && Math.abs(fz * f.dx - fx * f.dz) <= f.halfW + grow) return true
     }
-    // The first TREE_FREE_APPROACH metres of both approach surfaces.
-    const ox = x - s.cx
-    const oz = z - s.cz
-    const out = Math.abs(ox * s.dx + oz * s.dz) - s.runwayHalf
-    if (out <= TREE_FREE_APPROACH + TREE_FREE_MARGIN && Math.abs(oz * s.dx - ox * s.dz) <= APPROACH_HALF_WIDTH + TREE_FREE_MARGIN) {
-      return true
+    // The first TREE_FREE_APPROACH metres of the approach surfaces at both ends of every runway.
+    for (const r of s.runways) {
+      const ox = x - r.cx
+      const oz = z - r.cz
+      const out = Math.abs(ox * r.dx + oz * r.dz) - r.halfL
+      if (out <= TREE_FREE_APPROACH + TREE_FREE_MARGIN && Math.abs(oz * r.dx - ox * r.dz) <= APPROACH_HALF_WIDTH + TREE_FREE_MARGIN) {
+        return true
+      }
     }
   }
   return false

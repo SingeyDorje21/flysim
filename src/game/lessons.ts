@@ -8,7 +8,7 @@
 
 import { getAircraft, type AircraftId } from '../config/aircraftCatalog'
 import type { AircraftState } from '../simulation/types'
-import { getRunwayEnd, guidanceTo, inRect, runwayRect, toLocal, type RunwayEnd } from './airportGeometry'
+import { getRunwayEnd, guidanceTo, inRect, toLocal, type RunwayEnd } from './airportGeometry'
 import type { Challenge } from './challenges'
 import { FLAPS_UP_FACTOR, safePitchAtHeight, techniqueFor, type Technique } from './technique'
 import type { ChallengeProgress, FlightResult, GameMode, LessonCue, LessonView, ResultStat } from './types'
@@ -67,8 +67,9 @@ function guidanceWarning(c: StepContext): string | null {
 
 /** Signed distance right of the runway centreline, in the direction of travel for this end. */
 function rightOfCentreline(c: StepContext): number {
-  const across = toLocal(runwayRect(c.end.airport), c.s.position.x, c.s.position.z).across
-  return c.end.headingDeg === c.end.airport.runway.headingDeg ? across : -across
+  const rw = c.end.runway
+  const across = toLocal(rw.rect, c.s.position.x, c.s.position.z).across
+  return c.end.headingDeg === rw.def.headingDeg ? across : -across
 }
 
 function takeoffSteps(id: AircraftId): Step[] {
@@ -315,7 +316,7 @@ export class LessonChallenge implements Challenge {
       return
     }
     // On the ground off the paved runway: a take-off excursion, a short or wide touchdown, or a landing-roll excursion.
-    if (s.onGround && !inRect(runwayRect(this.end.airport), s.position.x, s.position.z)) {
+    if (s.onGround && !inRect(this.end.runway.rect, s.position.x, s.position.z)) {
       this.fail(landing && this.index <= 4 ? 'Missed the runway' : 'Runway excursion')
       return
     }

@@ -11,8 +11,9 @@ import {
   isPavedAt,
   nearestAirport,
   runwayAt,
+  airportFrame,
+  airportRunways,
   runwayEnds,
-  runwayRect,
   toLocal,
 } from '../airportGeometry'
 import { spawnFor } from '../spawns'
@@ -34,14 +35,35 @@ describe('runway geometry', () => {
     expect(r18.designator).toBe('18')
     expect(r18.threshold.z).toBeCloseTo(-800, 6)
     const [r09, r27] = runwayEnds(getAirport('harbor'))
-    expect([r09.designator, r27.designator]).toEqual(['09', '27'])
-    // Runway 09 is flown eastwards, so its threshold is the western end.
+    // The primary is the southern of two parallels: on the right flying east, on the left flying west.
+    expect([r09.designator, r27.designator]).toEqual(['09R', '27L'])
+    // Runway 09R is flown eastwards, so its threshold is the western end.
     expect(r09.threshold.x).toBeLessThan(getAirport('harbor').center.x)
+  })
+
+  it('gives every airport a second runway: parallels get L / R, crossing runways their own numbers', () => {
+    for (const a of AIRPORTS) {
+      const ends = runwayEnds(a).map((e) => e.designator)
+      expect(ends.length, a.id).toBeGreaterThanOrEqual(4)
+      expect(new Set(ends).size, a.id).toBe(ends.length)
+    }
+    expect(runwayEnds(getAirport('harbor')).map((e) => e.designator)).toEqual(['09R', '27L', '09L', '27R'])
+    expect(runwayEnds(getAirport('central')).map((e) => e.designator)).toEqual(['36', '18', '09', '27'])
+    // Secondary runways are parallel to the primary or cross it at 90 degrees.
+    for (const a of AIRPORTS) {
+      for (const r of a.runways) expect(Math.abs((r.headingDeg - a.runways[0].headingDeg) % 90), a.id).toBe(0)
+    }
+  })
+
+  it('finds a lettered runway from a bare number', () => {
+    expect(getRunwayEnd('harbor', '27').designator).toBe('27L')
+    expect(getRunwayEnd('harbor', '27R').designator).toBe('27R')
+    expect(getRunwayEnd('central', 'nonsense').designator).toBe('36')
   })
 
   it('handles rotated runways in local coordinates', () => {
     const a = getAirport('harbor')
-    const r = runwayRect(a)
+    const r = airportFrame(a)
     const east = headingVector(90)
     const p = { x: a.center.x + east.x * 1000, z: a.center.z + east.z * 1000 }
     expect(toLocal(r, p.x, p.z).along).toBeCloseTo(1000, 6)
@@ -54,7 +76,11 @@ describe('runway geometry', () => {
       expect(isPavedAt(a.center.x, a.center.z), a.id).toBe(true)
       const apron = airportLayout(a).apron
       expect(isPavedAt(apron.cx, apron.cz), a.id).toBe(true)
-      expect(runwayAt(a.center.x, a.center.z)?.id).toBe(a.id)
+      expect(runwayAt(a.center.x, a.center.z)?.airport.id).toBe(a.id)
+      for (const rw of airportRunways(a)) {
+        expect(isPavedAt(rw.rect.cx, rw.rect.cz), `${a.id} runway ${rw.index}`).toBe(true)
+        expect(runwayAt(rw.rect.cx, rw.rect.cz)?.airport.id).toBe(a.id)
+      }
     }
     expect(isPavedAt(5000, 5000)).toBe(false)
   })
@@ -77,7 +103,7 @@ describe('runway geometry', () => {
 
 describe('approach guidance', () => {
   it('locks onto the runway end ahead and measures glide-path deviation', () => {
-    const end = getRunwayEnd('harbor', '27')
+    const end = getRunwayEnd('harbor', '27L')
     const d = headingVector(end.headingDeg)
     const out = 4000
     const aimDist = out + 300
@@ -85,7 +111,7 @@ describe('approach guidance', () => {
     const x = end.threshold.x - d.x * out
     const z = end.threshold.z - d.z * out
     const g = approachGuidance(x, onPath + 20, z, end.headingDeg)
-    expect(g?.end.designator).toBe('27')
+    expect(g?.end.designator).toBe('27L')
     expect(g?.end.airport.id).toBe('harbor')
     expect(g!.distance).toBeCloseTo(out, 3)
     expect(g!.lateral).toBeCloseTo(0, 3)
@@ -112,7 +138,7 @@ describe('spawns', () => {
       for (const end of runwayEnds(a)) {
         const place = { airportId: a.id, runwayEnd: end.designator }
         const t = spawnFor('takeoff', place)
-        expect(inRect(runwayRect(a), t.position.x, t.position.z), `${a.id} ${end.designator}`).toBe(true)
+        expect(inRect(end.runway.rect, t.position.x, t.position.z), `${a.id} ${end.designator}`).toBe(true)
         expect(t.headingDeg).toBe(end.headingDeg)
         const l = spawnFor('landing', place)
         const g = approachGuidance(l.position.x, l.position.y, l.position.z, l.headingDeg)

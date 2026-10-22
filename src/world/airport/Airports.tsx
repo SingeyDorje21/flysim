@@ -18,6 +18,7 @@ import {
   type Texture,
 } from 'three'
 import { AIRPORTS } from '../../config/airports'
+import { longestRunway } from '../../game/airportGeometry'
 import { MeshBuilder } from './meshBuilder'
 import { buildAirportPlan, papiColors, planToWorld, type AirportPlan, type LightColor, type Rgb } from './plan'
 
@@ -116,7 +117,7 @@ function build(): Built {
     const group = new Group()
     group.name = `airport-${a.id}`
     group.position.set(a.center.x, a.elevation, a.center.z)
-    group.rotation.y = -a.runway.headingDeg * DEG
+    group.rotation.y = -a.runways[0].headingDeg * DEG
     root.add(group)
 
     // pavement (always visible)
@@ -211,7 +212,8 @@ function build(): Built {
       papiState: plan.papi.map(() => -1),
       cx: a.center.x,
       cz: a.center.z,
-      detailRange: DETAIL_DISTANCE + a.runway.length / 2,
+      // Every runway reaches at most its own length from the primary's centre.
+      detailRange: DETAIL_DISTANCE + longestRunway(a),
     })
   }
   return { root, nodes, geos, mats, texs }

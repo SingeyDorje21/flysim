@@ -68,6 +68,14 @@ describe('crash and time limit handling', () => {
     expect(c.progress.timeLimit).toBeNull()
   })
 
+  it('free flight notices a landing in the open once stopped', () => {
+    const c = createChallenge('freeFlight')
+    c.update(makeState({ onGround: false, heightAboveGround: 300, position: { x: 3000, y: 300, z: 3000 } }), DT)
+    c.update(makeState({ onGround: true, groundSpeed: 0, position: { x: 3000, y: 20, z: 3000 } }), DT)
+    expect(c.result).toBeNull()
+    expect(c.progress.objective).toMatch(/Landed in the open, FSCF is the nearest airport/)
+  })
+
   it('ignores updates once decided', () => {
     const c = createChallenge('freeFlight')
     c.update(makeState({ crashed: true }), DT)
@@ -109,11 +117,41 @@ describe('take-off challenge', () => {
 })
 
 describe('landing challenge', () => {
-  it('fails when touching down off the runway', () => {
+  /** Touch down at (x, z) at 1 m/s, then roll to a stop there. */
+  function landAt(x: number, z: number, headingDeg = 0) {
     const c = createChallenge('landing')
-    c.update(makeState({ onGround: false, position: { x: 0, y: 40, z: 1500 }, verticalSpeed: -2 }), DT)
-    c.update(makeState({ onGround: true, position: { x: 0, y: 13, z: 1000 } }), DT)
-    expect(c.result?.headline).toBe('Missed the runway')
+    c.update(makeState({ onGround: false, position: { x, y: 40, z }, verticalSpeed: -1, headingDeg }), DT)
+    c.update(makeState({ onGround: true, position: { x, y: 13, z }, groundSpeed: 30, airspeed: 30, headingDeg }), DT)
+    expect(c.result).toBeNull()
+    steps(120, () => c.update(makeState({ onGround: true, position: { x, y: 13, z }, groundSpeed: 0, headingDeg }), DT))
+    return c
+  }
+
+  it('counts a safe touchdown on open land as a field landing, at a reduced score', () => {
+    const c = landAt(0, 1000)
+    expect(c.result?.outcome).toBe('success')
+    expect(c.result?.headline).toBe('Field landing')
+    expect(c.result!.score).toBeLessThanOrEqual(500)
+  })
+
+  it('counts a landing on the other runway of the airport, at a reduced score', () => {
+    // Central Field's crossing runway 09/27 lies 480 m north of the centre.
+    const c = landAt(100, -480, 90)
+    expect(c.result?.headline).toBe('Landed on runway 09')
+    expect(c.result!.score).toBeLessThanOrEqual(700)
+    expect(c.result!.score).toBeGreaterThan(500)
+  })
+
+  it('penalises rolling off the runway after touching down on it', () => {
+    const c = createChallenge('landing')
+    c.update(makeState({ onGround: false, position: { x: 0, y: 14, z: RUNWAY.aimPointZ + 5 }, verticalSpeed: -0.6 }), DT)
+    c.update(makeState({ onGround: true, position: { x: 0, y: 13, z: RUNWAY.aimPointZ }, groundSpeed: 30 }), DT)
+    c.update(makeState({ onGround: true, position: { x: 60, y: 13, z: RUNWAY.aimPointZ - 200 }, groundSpeed: 10 }), DT)
+    expect(c.result).toBeNull()
+    steps(120, () => c.update(makeState({ onGround: true, position: { x: 60, y: 13, z: RUNWAY.aimPointZ - 200 }, groundSpeed: 0 }), DT))
+    expect(c.result?.outcome).toBe('success')
+    expect(c.result?.reason).toBe('You rolled off the runway')
+    expect(c.result!.score).toBeLessThanOrEqual(700)
   })
 
   it('scores a gentle touchdown at the aim point and a stop on the runway', () => {

@@ -420,53 +420,61 @@ function applyConstraints(x: number, z: number, h: number): number {
   const near = sitesNear(x, z)
   if (near === 0) return h
 
-  // Approach surfaces of both runway ends of every airport: a sloped cap
-  // (elevation + 12 m + 3 % of the distance from the threshold) over a padded
-  // 1.5 km corridor out to 10 km, faded back to natural terrain.
+  // Approach surfaces at both ends of every runway: a sloped cap (elevation +
+  // 12 m + 3 % of the distance from the threshold) over a padded 1.5 km
+  // corridor out to 10 km, faded back to natural terrain.
   for (let i = 0; i < N_SITES; i++) {
     if ((near & (1 << i)) === 0) continue
     const s = AIRPORT_SITES[i]
     const bx = s.box
     if (x < bx.minX || x > bx.maxX || z < bx.minZ || z > bx.maxZ) continue
-    const ox = x - s.cx
-    const oz = z - s.cz
-    const along = ox * s.dx + oz * s.dz
-    const out = (along < 0 ? -along : along) - s.runwayHalf
-    const cap = s.elevation + APPROACH_CARVE_BASE + APPROACH_SLOPE * (out > 0 ? out : 0)
-    if (h <= cap) continue
-    const across = oz * s.dx - ox * s.dz
-    const e = (across < 0 ? -across : across) - APP_HALF
-    const f = out - APP_END
-    if (e <= 0 && f <= 0) {
-      h = cap
-      continue
+    for (let k = 0; k < s.runways.length; k++) {
+      const r = s.runways[k]
+      const ox = x - r.cx
+      const oz = z - r.cz
+      const along = ox * r.dx + oz * r.dz
+      const out = (along < 0 ? -along : along) - r.halfL
+      const cap = s.elevation + APPROACH_CARVE_BASE + APPROACH_SLOPE * (out > 0 ? out : 0)
+      if (h <= cap) continue
+      const across = oz * r.dx - ox * r.dz
+      const e = (across < 0 ? -across : across) - APP_HALF
+      const f = out - APP_END
+      if (e <= 0 && f <= 0) {
+        h = cap
+        continue
+      }
+      const ee = e > 0 ? e : 0
+      const ff = f > 0 ? f : 0
+      if (ee >= APPROACH_FADE || ff >= APPROACH_FADE) continue
+      const d = Math.sqrt(ee * ee + ff * ff)
+      if (d < APPROACH_FADE) h += (cap - h) * (1 - smoothstep(0, APPROACH_FADE, d))
     }
-    const ee = e > 0 ? e : 0
-    const ff = f > 0 ? f : 0
-    if (ee >= APPROACH_FADE || ff >= APPROACH_FADE) continue
-    const d = Math.sqrt(ee * ee + ff * ff)
-    if (d < APPROACH_FADE) h += (cap - h) * (1 - smoothstep(0, APPROACH_FADE, d))
   }
 
-  // Airport plateaus, applied last: exact out to the flatZone plus margin and
-  // two grid cells, then a smooth blend to the (capped) natural terrain.
+  // Airport plateaus, applied last: exact over the flat zones plus margin and
+  // two grid cells, then a smooth blend (from the nearest zone) to the
+  // (capped) natural terrain.
   for (let i = 0; i < N_SITES; i++) {
     if ((near & (1 << i)) === 0) continue
     const s = AIRPORT_SITES[i]
     const bx = s.flatBox
     if (x < bx.minX || x > bx.maxX || z < bx.minZ || z > bx.maxZ) continue
-    const ox = x - s.fcx
-    const oz = z - s.fcz
-    const along = ox * s.fdx + oz * s.fdz
-    const across = oz * s.fdx - ox * s.fdz
-    const e = (along < 0 ? -along : along) - s.flatHalfL - FLAT_GROW
-    const f = (across < 0 ? -across : across) - s.flatHalfW - FLAT_GROW
-    if (e <= 0 && f <= 0) return s.elevation
-    const ee = e > 0 ? e : 0
-    const ff = f > 0 ? f : 0
-    if (ee >= s.blend || ff >= s.blend) continue
-    const d = Math.sqrt(ee * ee + ff * ff)
-    if (d < s.blend) h = s.elevation + (h - s.elevation) * smoothstep(0, s.blend, d)
+    let dMin = Infinity
+    for (let k = 0; k < s.flats.length; k++) {
+      const r = s.flats[k]
+      const ox = x - r.cx
+      const oz = z - r.cz
+      const along = ox * r.dx + oz * r.dz
+      const across = oz * r.dx - ox * r.dz
+      const e = (along < 0 ? -along : along) - r.halfL - FLAT_GROW
+      const f = (across < 0 ? -across : across) - r.halfW - FLAT_GROW
+      if (e <= 0 && f <= 0) return s.elevation
+      const ee = e > 0 ? e : 0
+      const ff = f > 0 ? f : 0
+      const d = Math.sqrt(ee * ee + ff * ff)
+      if (d < dMin) dMin = d
+    }
+    if (dMin < s.blend) h = s.elevation + (h - s.elevation) * smoothstep(0, s.blend, dMin)
   }
   return h
 }

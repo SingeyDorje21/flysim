@@ -1,5 +1,6 @@
 import { getAircraft } from '../config/aircraftCatalog'
 import { getAirport } from '../config/airports'
+import { getRunwayEnd } from '../game/airportGeometry'
 import { techniqueFor } from '../game/technique'
 import { useGameStore } from '../state/gameStore'
 import { flapLabel, formatAltitude, formatSpeed, formatRunwayLength } from './format'
@@ -64,7 +65,7 @@ export function FlightSchool() {
         )}
         <p className="selection-line" data-testid="lesson-place">
           Lesson airport: {airport.code} {airport.name}, runway {tech.lessonPlace.runwayEnd} (
-          {formatRunwayLength(airport.runway.length, units)})
+          {formatRunwayLength(getRunwayEnd(airport.id, tech.lessonPlace.runwayEnd).runway.def.length, units)})
         </p>
         <div className="school-actions">
           <button type="button" className="btn primary big" onClick={() => startFlight('lessonTakeoff')}>

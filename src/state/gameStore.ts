@@ -9,7 +9,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 import { QUALITY_LEVELS, type Quality } from '../config/quality'
 import { AIRCRAFT_IDS, type AircraftId } from '../config/aircraftCatalog'
 import { HOME_AIRPORT_ID, getAirport } from '../config/airports'
-import { runwayEnds } from '../game/airportGeometry'
+import { getRunwayEnd, runwayEnds } from '../game/airportGeometry'
 import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES, type CameraMode, type FlightResult, type GameMode } from '../game/types'
 import { TIMES_OF_DAY, type TimeOfDay } from '../world/types'
@@ -200,9 +200,7 @@ export const useGameStore = create<GameState>()(
       selectAircraft: (aircraftId) => set({ aircraftId }),
 
       selectAirport: (airportId, runwayEnd) => {
-        const ends = runwayEnds(getAirport(airportId))
-        const end = ends.find((e) => e.designator === runwayEnd) ?? ends[0]
-        set({ airportId, runwayEnd: end.designator })
+        set({ airportId, runwayEnd: getRunwayEnd(airportId, runwayEnd ?? '').designator })
       },
 
       goToMainMenu: () => set({ screen: 'mainMenu', overlay: 'none', paused: false, result: null, newBest: false }),

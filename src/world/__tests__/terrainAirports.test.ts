@@ -43,19 +43,21 @@ function median(values: number[]): number {
   return s[Math.floor(s.length / 2)]
 }
 
-/** Natural (pre-constraint) heights over an airport's flat zone, 30 m lattice. */
+/** Natural (pre-constraint) heights over an airport's flat zones, 30 m lattice. */
 function naturalOverZone(a: AirportDef): number[] {
   const out: number[] = []
-  forEachInOriented(airportLayout(a).flatZone, 30, (x, z) => out.push(baseHeightAt(x, z)))
+  for (const fz of airportLayout(a).flatZones) forEachInOriented(fz, 30, (x, z) => out.push(baseHeightAt(x, z)))
   return out
 }
+
+const inAnyZone = (zones: OrientedRect[], x: number, z: number, margin: number) => zones.some((f) => inRect(f, x, z, margin))
 
 describe('airport terrain', () => {
   it('keeps the central field as before: elevation 12, runway 36/18 at the origin', () => {
     const c = AIRPORTS.find((a) => a.id === HOME_AIRPORT_ID)!
     expect(c.elevation).toBe(RUNWAY.elevation)
     expect(c.center).toEqual({ x: RUNWAY.centerX, z: RUNWAY.centerZ })
-    expect(c.runway.headingDeg).toBe(0)
+    expect(c.runways[0].headingDeg).toBe(0)
   })
 
   for (const a of AIRPORTS) {
@@ -63,16 +65,22 @@ describe('airport terrain', () => {
       const layout = airportLayout(a)
       const site = AIRPORT_SITES.find((s) => s.def.id === a.id)!
 
-      it('is exactly at its elevation over the flat zone (plus margin)', () => {
-        forEachInOriented(
-          layout.flatZone,
-          7,
-          (x, z) => {
-            expect(terrain.heightAt(x, z)).toBe(a.elevation)
-            expect(terrain.surfaceAt(x, z)).not.toBe('water')
-          },
-          FLAT_MARGIN,
-        )
+      it('has more than one runway', () => {
+        expect(a.runways.length).toBeGreaterThan(1)
+      })
+
+      it('is exactly at its elevation over every flat zone (plus margin)', () => {
+        for (const fz of layout.flatZones) {
+          forEachInOriented(
+            fz,
+            7,
+            (x, z) => {
+              expect(terrain.heightAt(x, z)).toBe(a.elevation)
+              expect(terrain.surfaceAt(x, z)).not.toBe('water')
+            },
+            FLAT_MARGIN,
+          )
+        }
       })
 
       it('sits on land, at an elevation close to the natural ground', () => {
@@ -92,7 +100,10 @@ describe('airport terrain', () => {
       })
 
       it('blends smoothly into the surrounding terrain, which is mostly land', () => {
-        const fz = layout.flatZone
+        for (const fz of layout.flatZones) checkBlend(fz)
+      })
+
+      function checkBlend(fz: OrientedRect): void {
         const hl = fz.length / 2 + FLAT_MARGIN
         const hw = fz.width / 2 + FLAT_MARGIN
         let water = 0
@@ -118,7 +129,7 @@ describe('airport terrain', () => {
           }
         }
         expect(water / n).toBeLessThan(0.05)
-      })
+      }
 
       it('keeps the approach surface clear at both runway ends', () => {
         for (const end of runwayEnds(a)) {
@@ -137,12 +148,14 @@ describe('airport terrain', () => {
         }
       })
 
-      it('reports paved on the runway centreline, taxiway and apron, grass or water just outside', () => {
-        const rw = layout.runway
-        for (let u = -rw.length / 2 + 1; u <= rw.length / 2 - 1; u += 20) {
-          const p = at(rw, u, 0)
-          expect(terrain.surfaceAt(p.x, p.z)).toBe('paved')
+      it('reports paved on the runway centrelines, taxiway and apron, grass or water just outside', () => {
+        for (const r of layout.runways) {
+          for (let u = -r.length / 2 + 1; u <= r.length / 2 - 1; u += 20) {
+            const p = at(r, u, 0)
+            expect(terrain.surfaceAt(p.x, p.z)).toBe('paved')
+          }
         }
+        const rw = layout.runways[0]
         for (const r of [layout.taxiway, layout.apron, ...layout.connectors]) {
           const c = at(r, 0, 0)
           expect(terrain.surfaceAt(c.x, c.z)).toBe('paved')
@@ -156,17 +169,20 @@ describe('airport terrain', () => {
           expect(terrain.surfaceAt(p.x, p.z)).toBe('paved')
         }
         const outside = [
-          at(rw, 0, -rw.width / 2 - 5), // left of the runway (the taxiway is on the right)
-          at(rw, rw.length / 2 + 5, 0), // past both ends
-          at(rw, -rw.length / 2 - 5, 0),
+          // left of the primary (the taxiway is on the right), clear of connectors to a parallel runway
+          at(rw, rw.length * 0.25, -rw.width / 2 - 5),
           at(ap, 0, ap.width / 2 + 5), // behind the apron
           at(ap, ap.length / 2 + 5, 0),
+          // past both ends of every runway
+          ...layout.runways.flatMap((r) => [at(r, r.length / 2 + 5, 0), at(r, -r.length / 2 - 5, 0)]),
         ]
         for (const p of outside) expect(['grass', 'water']).toContain(terrain.surfaceAt(p.x, p.z))
       })
 
       it('grows no trees in the flat zone, on paved ground or near the thresholds', () => {
-        forEachInOriented(layout.flatZone, 25, (x, z) => expect(treesExcludedAt(x, z)).toBe(true), FLAT_MARGIN)
+        for (const fz of layout.flatZones) {
+          forEachInOriented(fz, 25, (x, z) => expect(treesExcludedAt(x, z)).toBe(true), FLAT_MARGIN)
+        }
         for (const end of runwayEnds(a)) {
           const dx = Math.sin(end.headingDeg * DEG)
           const dz = -Math.cos(end.headingDeg * DEG)
@@ -178,8 +194,8 @@ describe('airport terrain', () => {
         }
         // Placed trees on every tile touching the plateau and the near approaches.
         const density = QUALITY_PROFILES.high.treeDensity
-        const reach = a.runway.length / 2 + TREE_FREE_APPROACH
-        const r = Math.max(reach, layout.flatZone.width / 2 + 400)
+        const reach = Math.max(...a.runways.map((rw) => rw.length)) + TREE_FREE_APPROACH
+        const r = Math.max(reach, layout.flatZones[0].width / 2 + 400)
         const t0x = Math.floor((a.center.x - r) / TREE_TILE)
         const t1x = Math.floor((a.center.x + r) / TREE_TILE)
         const t0z = Math.floor((a.center.z - r) / TREE_TILE)
@@ -194,11 +210,13 @@ describe('airport terrain', () => {
                 const x = arr[k]
                 const z = arr[k + 2]
                 checked++
-                expect(inRect(layout.flatZone, x, z, FLAT_MARGIN)).toBe(false)
+                expect(inAnyZone(layout.flatZones, x, z, FLAT_MARGIN)).toBe(false)
                 expect(terrain.surfaceAt(x, z)).toBe('grass')
-                const { along, across } = toLocal(layout.runway, x, z)
-                const out = Math.abs(along) - a.runway.length / 2
-                expect(out <= TREE_FREE_APPROACH && Math.abs(across) <= APPROACH_HALF_WIDTH).toBe(false)
+                for (const rw of layout.runways) {
+                  const { along, across } = toLocal(rw, x, z)
+                  const out = Math.abs(along) - rw.length / 2
+                  expect(out <= TREE_FREE_APPROACH && Math.abs(across) <= APPROACH_HALF_WIDTH).toBe(false)
+                }
               }
             }
           }

@@ -1155,8 +1155,11 @@ export class AircraftPhysics implements FlightModel {
       // The landing limit is about the main wheels; the nose wheel (the one non-main leg,
       // index 2: the order is left main, right main, nose) is built for derotation loads,
       // so it gets twice the tolerance.
+      // Judged by how fast the wheel closes on the ground along its normal, so a touchdown
+      // parallel to a sloping field (vertical speed = ground speed x grade) is not a crash
+      // and running into rising ground is.
       const sinkLimit = cfg.crash.hardLandingSinkRate * (gd.main ? 1 : 2)
-      if (detectTouchdown && !this.gearContact[i] && -vcy > sinkLimit) {
+      if (detectTouchdown && !this.gearContact[i] && this.groundClosure(px, pz, vcx, vcy, vcz) > sinkLimit) {
         this.flagHardLanding = true
       }
       this.gearContact[i] = true
@@ -1209,6 +1212,15 @@ export class AircraftPhysics implements FlightModel {
     this.torque.x += tb.x
     this.torque.y += tb.y
     this.torque.z += tb.z
+  }
+
+  /** Speed (m/s) at which a point moving at (vx, vy, vz) closes on the ground at (x, z), along its normal. */
+  private groundClosure(x: number, z: number, vx: number, vy: number, vz: number): number {
+    const d = SLOPE_SAMPLE
+    const gx = (this.groundHeight(x + d, z) - this.groundHeight(x - d, z)) / (2 * d)
+    const gz = (this.groundHeight(x, z + d) - this.groundHeight(x, z - d)) / (2 * d)
+    // Upward normal of the surface y = h(x, z) is (-gx, 1, -gz) / |...|.
+    return -(-gx * vx + vy - gz * vz) / Math.sqrt(gx * gx + 1 + gz * gz)
   }
 
   private slopeDeg(x: number, z: number): number {
