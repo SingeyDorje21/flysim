@@ -1,9 +1,9 @@
 import type { Vec3 } from '../simulation/types'
 
-export type GameMode = 'freeFlight' | 'takeoff' | 'landing' | 'rings' | 'lessonTakeoff' | 'lessonLanding'
+export type GameMode = 'freeFlight' | 'takeoff' | 'landing' | 'rings' | 'lessonTakeoff' | 'lessonLanding' | 'lessonCircuit'
 
 /** Flight School lessons (guided, assists on). */
-export const LESSON_MODES: readonly GameMode[] = ['lessonTakeoff', 'lessonLanding']
+export const LESSON_MODES: readonly GameMode[] = ['lessonTakeoff', 'lessonLanding', 'lessonCircuit']
 
 /** A live gauge for the current lesson step: the value, and the band to keep it in. */
 export interface LessonCue {

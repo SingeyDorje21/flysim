@@ -3,7 +3,7 @@ import { getAirport } from '../config/airports'
 import { getRunwayEnd } from '../game/airportGeometry'
 import { techniqueFor } from '../game/technique'
 import { useGameStore } from '../state/gameStore'
-import { flapLabel, formatAltitude, formatSpeed, formatRunwayLength } from './format'
+import { flapLabel, formatAltitude, formatDistance, formatSpeed, formatRunwayLength } from './format'
 import { Hangar } from './Hangar'
 
 /** Flight School: pick an aircraft, read how to fly it, start a guided lesson. */
@@ -74,7 +74,14 @@ export function FlightSchool() {
           <button type="button" className="btn primary big" onClick={() => startFlight('lessonLanding')}>
             Start Landing Lesson
           </button>
+          <button type="button" className="btn primary big" onClick={() => startFlight('lessonCircuit')}>
+            Start Circuit Lesson
+          </button>
         </div>
+        <p className="selection-line" data-testid="circuit-plan">
+          Circuit lesson: take off, climb to {formatAltitude(tech.circuit.height, units)}, fly a left-hand circuit with
+          the downwind leg {formatDistance(tech.circuit.offset, units)} from the runway, and land back on it.
+        </p>
       </section>
     </div>
   )

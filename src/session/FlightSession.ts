@@ -17,7 +17,7 @@ import { createChallenge, type Challenge } from '../game/challenges'
 import { HOME_PLACE, spawnFor, type FlightPlace } from '../game/spawns'
 import { safePitchAtHeight, techniqueFor, type Technique } from '../game/technique'
 import { RING_COURSE } from '../game/courses'
-import type { FlightResult, GameMode, RingCourseView } from '../game/types'
+import { LESSON_MODES, type FlightResult, type GameMode, type RingCourseView } from '../game/types'
 import { KeyboardControls } from '../input/keyboard'
 import { AircraftPhysics } from '../simulation/AircraftPhysics'
 import { FixedTimestep } from '../simulation/FixedTimestep'
@@ -79,6 +79,8 @@ export class FlightSession {
   private assistsSetting = true
   private landed = false
   private flared = false
+  /** A lesson's approach phase (approach autothrust and flare assist), as of the last step. */
+  private approachPhase = false
   private autothrustIntegral = 0
   private autothrustBase = 0.4
   private readonly autopilot: AutopilotController
@@ -161,6 +163,7 @@ export class FlightSession {
     this.reported = false
     this.landed = false
     this.flared = false
+    this.approachPhase = false
     this.autothrustIntegral = 0
     this.autothrustBase = this.physics.state.controls.throttle
     this.autopilot.reset()
@@ -221,7 +224,7 @@ export class FlightSession {
   }
 
   private get assistsActive(): boolean {
-    return this.assistsSetting || this.mode === 'lessonTakeoff' || this.mode === 'lessonLanding'
+    return this.assistsSetting || LESSON_MODES.includes(this.mode)
   }
 
   /**
@@ -242,7 +245,7 @@ export class FlightSession {
   }
 
   /**
-   * Landing-lesson flare assist: near the runway, add a little nose-up when
+   * Lesson approach flare assist: near the runway, add a little nose-up when
    * sinking faster than 2 m/s, and ignore back pressure once the descent has
    * stopped so the aircraft cannot balloon and drop in. The pilot still flies
    * the flare; this only trims the extremes.
@@ -250,7 +253,7 @@ export class FlightSession {
   private applyFlareAssist(controls: ControlInputs): void {
     const s = this.physics.state
     const h = s.heightAboveGround
-    if (this.mode !== 'lessonLanding') return
+    if (!this.approachPhase) return
     // On the runway the aircraft's derotation law lowers the nose (AircraftPhysics).
     if (s.onGround) return
     if (h > this.technique.flareHeight) return
@@ -263,13 +266,13 @@ export class FlightSession {
   }
 
   /**
-   * Landing-lesson autothrust: hold the approach speed with the throttle
+   * Lesson approach autothrust: hold the approach speed with the throttle
    * (as airliners do on final), then close it at flare height. The keyboard
    * lever follows, so the pilot takes over seamlessly on the ground.
    */
   private applyApproachAutothrust(controls: ControlInputs, dt: number): void {
     const s = this.physics.state
-    if (this.mode !== 'lessonLanding' || s.onGround || this.landed) {
+    if (!this.approachPhase || s.onGround || this.landed) {
       if (s.onGround) this.landed = true
       return
     }
@@ -334,6 +337,8 @@ export class FlightSession {
     if (this.apActive && !ap) {
       this.apDisconnectCount++
       clearDialed(['headingDeg', 'altitude', 'verticalSpeed'])
+      // Let go trimmed: the stick the autopilot was holding (last applied) moves into the trim.
+      this.handOverTrimmed(s.controls.pitch, s.controls.trim)
     }
     if (this.athrActive && !athr) clearDialed(['speed'])
     this.apActive = ap
@@ -347,6 +352,17 @@ export class FlightSession {
       this.keyboard.setThrottle(controls.throttle)
       this.athrThrottle = controls.throttle
     }
+  }
+
+  /**
+   * Hand over trimmed when an automatic system lets go of the stick: on the
+   * trainer the stick it held moves into the trim lever, so the elevator stays
+   * put; a fly-by-wire jet holds its path and bank by itself with the stick neutral.
+   */
+  private handOverTrimmed(stick: number, trim: number): void {
+    const cfg = getAircraftConfig(this.aircraftId)
+    if (cfg.fbw) return
+    this.keyboard.setTrim(trim + (stick * cfg.surfaces.elevatorMax) / cfg.surfaces.trimRange)
   }
 
   /**
@@ -440,12 +456,7 @@ export class FlightSession {
     this.keyboard.setThrottle(controls.throttle)
     this.assistThrottle = controls.throttle
     if (!release) return
-    // Hand over trimmed: the trainer's held stick moves into the trim lever, so the elevator
-    // stays put; a fly-by-wire jet holds its path and bank by itself with the stick neutral.
-    const cfg = getAircraftConfig(this.aircraftId)
-    if (!cfg.fbw) {
-      this.keyboard.setTrim(controls.trim + (controls.pitch * cfg.surfaces.elevatorMax) / cfg.surfaces.trimRange)
-    }
+    this.handOverTrimmed(controls.pitch, controls.trim)
     this.stopAssist(
       release === 'aligned'
         ? `Lined up with ${runway} on the glide path: you have control`
@@ -458,6 +469,16 @@ export class FlightSession {
     this.handleAssistRequest()
     if (this.landingAssist.active) this.applyLandingAssist(controls, dt)
     else this.applyAutopilot(controls, dt)
+    const approach = this.challenge.approachAssists === true
+    if (approach && !this.approachPhase) {
+      // Entering the approach (from the start of a landing lesson, or after a circuit's
+      // final turn): the approach autothrust starts from the throttle the pilot has set.
+      this.landed = false
+      this.flared = false
+      this.autothrustIntegral = 0
+      this.autothrustBase = this.physics.state.controls.throttle
+    }
+    this.approachPhase = approach
     this.applyFlareAssist(controls)
     // The tail-strike guard has the final say over pitch.
     if (this.assistsActive) this.applyTailStrikeGuard(controls)

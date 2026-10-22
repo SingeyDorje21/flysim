@@ -104,6 +104,7 @@ export const SPAWNS: Record<GameMode, SpawnState> = {
   ...BASE_SPAWNS,
   lessonTakeoff: BASE_SPAWNS.takeoff,
   lessonLanding: BASE_SPAWNS.landing,
+  lessonCircuit: BASE_SPAWNS.takeoff,
 }
 
 export function isOnRunway(x: number, z: number, margin = 0): boolean {
