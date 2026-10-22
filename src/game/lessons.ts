@@ -1,6 +1,7 @@
 /**
- * Flight School lessons: a coach that walks the pilot through a take-off or
- * a landing one step at a time, tuned to the aircraft (technique.ts). Each
+ * Flight School lessons: a coach that walks the pilot through a take-off, a
+ * landing, or a whole circuit (take-off, the pattern legs, landing) one step
+ * at a time, tuned to the aircraft (technique.ts). Each
  * step has an instruction, the keys to press, a live gauge with its target
  * band, a completion check and corrective warnings. Implements Challenge, so
  * the session drives it like any other mode. Pure TS.
@@ -8,10 +9,10 @@
 
 import { getAircraft, type AircraftId } from '../config/aircraftCatalog'
 import type { AircraftState } from '../simulation/types'
-import { getRunwayEnd, guidanceTo, inRect, toLocal, type RunwayEnd } from './airportGeometry'
+import { getRunwayEnd, guidanceTo, headingVector, inRect, toLocal, type RunwayEnd } from './airportGeometry'
 import type { Challenge } from './challenges'
 import { FLAPS_UP_FACTOR, safePitchAtHeight, techniqueFor, type Technique } from './technique'
-import type { ChallengeProgress, FlightResult, GameMode, LessonCue, LessonView, ResultStat } from './types'
+import type { ChallengeProgress, FlightResult, LessonCue, LessonView, ResultStat } from './types'
 
 const KT = 0.514444
 const FT = 0.3048
@@ -38,7 +39,13 @@ interface Step {
   warning(c: StepContext): string | null
   /** Skip this step entirely for this aircraft/state. */
   skip?(c: StepContext): boolean
+  /** The approach phase: approach autothrust and the flare assist work from this step on. */
+  approach?: boolean
+  /** The step that ends with the touchdown: leaving the runway before it is a missed runway. */
+  touchdown?: boolean
 }
+
+export type LessonMode = 'lessonTakeoff' | 'lessonLanding' | 'lessonCircuit'
 
 const kt = (mps: number) => Math.round(mps / KT)
 const ft = (m: number) => Math.round(m / FT)
@@ -166,8 +173,148 @@ function takeoffSteps(id: AircraftId): Step[] {
   ]
 }
 
-function landingSteps(): Step[] {
+// ---------------------------------------------------------------- circuit
+
+/** Position in the runway frame: metres past the threshold (landing direction) and left of the centreline. */
+function circuitFrame(c: StepContext): { along: number; left: number } {
+  const d = headingVector(c.end.headingDeg)
+  const along = (c.s.position.x - c.end.threshold.x) * d.x + (c.s.position.z - c.end.threshold.z) * d.z
+  return { along, left: -rightOfCentreline(c) }
+}
+
+const norm360 = (h: number) => ((h % 360) + 360) % 360
+const headingText = (h: number) => String(Math.round(norm360(h)) || 360).padStart(3, '0')
+const headingError = (c: StepContext, target: number) => ((c.s.headingDeg - target + 540) % 360) - 180
+
+function headingCue(c: StepContext, target: number): LessonCue {
+  return { label: `Heading off ${headingText(target)}`, kind: 'degrees', value: headingError(c, target), target: [-8, 8], range: [-90, 90] }
+}
+
+/** Above (+) or below (-) circuit height (m). */
+const heightError = (c: StepContext) => c.s.altitude - (c.end.airport.elevation + c.t.circuit.height)
+
+function legWarning(c: StepContext): string | null {
+  if (c.s.stallWarning) return 'Stall warning: lower the nose (W) and add power (R)'
+  if (Math.abs(c.s.bankDeg) > 35) return 'Too steep: keep the bank under 30 degrees (A / D)'
+  if (c.s.heightAboveGround < c.t.circuit.height * 0.5) return 'Low over the ground: climb back to circuit height (S, R)'
+  if (c.s.airspeed > c.t.circuit.speed + 25 * KT) return `Too fast for the circuit: reduce power (F) to about ${kt(c.t.circuit.speed)} kt`
+  const h = heightError(c)
+  if (h > 60) return 'Above circuit height: lower the nose a little (W)'
+  if (h < -60) return 'Below circuit height: raise the nose a little (S) and add power (R)'
+  return null
+}
+
+const nm = (m: number) => (m / 1852).toFixed(1)
+/** Downwind, base and the final turn are flown this much above the approach speed (level flight needs it). */
+const DOWNWIND_FACTOR = 1.15
+
+/**
+ * The pattern: climb to circuit height, then four left turns. Each leg ends
+ * at a point in the runway frame (not on a heading), a turn radius early so
+ * the turn rolls out on the next leg.
+ */
+function circuitSteps(): Step[] {
   return [
+    {
+      title: 'Upwind',
+      instruction: (c) =>
+        `Keep climbing straight ahead. Circuit height is ${ft(c.t.circuit.height)} ft above the field: ` +
+        `the coach calls the turn at ${ft((c.t.circuit.height * 2) / 3)} ft. Fly the circuit at about ${kt(c.t.circuit.speed)} kt.`,
+      keys: () => ['S', 'W', 'F'],
+      cue: (c) => ({
+        label: 'Height above field',
+        kind: 'altitude',
+        value: c.s.altitude - c.end.airport.elevation,
+        target: [(c.t.circuit.height * 2) / 3, c.t.circuit.height],
+        range: [0, c.t.circuit.height + 120],
+      }),
+      // Turn crosswind while still climbing, and finish the climb on the crosswind leg.
+      met: (c) => heightError(c) > -c.t.circuit.height / 3,
+      warning: (c) => {
+        if (c.s.stallWarning) return 'Stall warning: lower the nose (W)'
+        if (Math.abs(c.s.bankDeg) > 15) return 'Level the wings (A / D)'
+        return c.s.verticalSpeed < 0 ? 'Descending: raise the nose a little (S)' : null
+      },
+    },
+    {
+      title: 'Crosswind',
+      instruction: (c) =>
+        `Turn left onto heading ${headingText(c.end.headingDeg - 90)} (A, about 25 degrees of bank), climb on to circuit height and level off ` +
+        `and fly out until the runway is ${nm(c.t.circuit.offset)} nm to your left.`,
+      keys: () => ['A', 'D', 'W'],
+      cue: (c) => headingCue(c, c.end.headingDeg - 90),
+      met: (c) => circuitFrame(c).left >= c.t.circuit.offset - c.t.circuit.turnRadius,
+      warning: (c) => {
+        if (Math.abs(headingError(c, c.end.headingDeg - 90)) > 40 && c.time > 30) return 'Turn further left (A)'
+        // Still climbing to circuit height here: only the steep-bank, speed and terrain warnings.
+        return heightError(c) < -60 && c.s.verticalSpeed > 0 ? null : legWarning(c)
+      },
+    },
+    {
+      title: 'Downwind',
+      instruction: (c) =>
+        `Turn left onto downwind, heading ${headingText(c.end.headingDeg + 180)}: parallel to the runway, at circuit height.`,
+      keys: () => ['A', 'D'],
+      cue: (c) => headingCue(c, c.end.headingDeg + 180),
+      met: (c) => Math.abs(headingError(c, c.end.headingDeg + 180)) < 10,
+      hold: 3,
+      warning: legWarning,
+    },
+    {
+      title: 'Before landing',
+      instruction: (c) =>
+        `On downwind: slow to about ${kt(c.t.approachSpeed * DOWNWIND_FACTOR)} kt (F), set landing flaps (X)` +
+        `${c.t.retractableGear ? ' and lower the gear (G)' : ''}. Keep circuit height.`,
+      keys: (c) => (c.t.retractableGear ? ['F', 'X', 'G'] : ['F', 'X']),
+      cue: (c) => speedCue(c.s, c.t.approachSpeed * DOWNWIND_FACTOR - 5 * KT, c.t.approachSpeed * DOWNWIND_FACTOR + 8 * KT),
+      met: (c) =>
+        c.s.controls.flaps >= c.t.landingFlaps - 1e-6 &&
+        (!c.t.retractableGear || c.s.gearPosition > 0.99) &&
+        c.s.airspeed < c.t.approachSpeed * DOWNWIND_FACTOR + 10 * KT,
+      warning: (c) => (c.s.airspeed < c.t.approachSpeed * DOWNWIND_FACTOR - 8 * KT ? 'Too slow: add a little power (R)' : legWarning(c)),
+    },
+    {
+      title: 'Base turn',
+      instruction: (c) =>
+        `Fly on past the runway. Turn base when it is about ${nm(c.t.circuit.finalLength)} nm behind your left shoulder: the coach will call it.`,
+      keys: () => ['A', 'D'],
+      cue: (c) => ({
+        label: 'Past the threshold',
+        kind: 'altitude',
+        value: -circuitFrame(c).along,
+        target: [c.t.circuit.finalLength - c.t.circuit.turnRadius, c.t.circuit.finalLength + 400],
+        range: [0, c.t.circuit.finalLength + 600],
+      }),
+      met: (c) => circuitFrame(c).along <= -(c.t.circuit.finalLength - c.t.circuit.turnRadius),
+      warning: legWarning,
+    },
+    {
+      title: 'Base',
+      instruction: (c) =>
+        `Turn left onto base, heading ${headingText(c.end.headingDeg + 90)}, and start down: lower the nose (W) and ` +
+        `reduce power (F) to bring the glide gauge to the centre.`,
+      keys: () => ['A', 'W', 'F'],
+      cue: glideCue,
+      met: (c) => circuitFrame(c).left <= c.t.circuit.turnRadius,
+      warning: (c) => {
+        if (c.s.stallWarning) return 'Stall warning: lower the nose (W) and add power (R)'
+        if (Math.abs(c.s.bankDeg) > 35) return 'Too steep: keep the bank under 30 degrees (A / D)'
+        return Math.abs(headingError(c, c.end.headingDeg + 90)) > 40 && c.time > 30 ? 'Turn further left (A)' : null
+      },
+    },
+    {
+      title: 'Final turn',
+      instruction: (c) => `Turn left onto final, heading ${headingText(c.end.headingDeg)}, and roll out lined up with the runway.`,
+      keys: () => ['A', 'D'],
+      cue: (c) => headingCue(c, c.end.headingDeg),
+      met: (c) => Math.abs(headingError(c, c.end.headingDeg)) < 15,
+      warning: (c) => (c.s.stallWarning ? 'Stall warning: lower the nose (W) and add power (R)' : null),
+    },
+  ]
+}
+
+function landingSteps(): Step[] {
+  const steps: Step[] = [
     {
       title: 'Line up',
       instruction: () => 'Follow the magenta diamonds: A / D to centre left-right, W / S to stay on the glide path.',
@@ -175,7 +322,10 @@ function landingSteps(): Step[] {
       cue: glideCue,
       met: (c) => {
         const g = guidanceTo(c.end, c.s.position.x, c.s.position.y, c.s.position.z)
-        return Math.abs(g.lateral) < 40 && Math.abs(g.vertical) < 20
+        // Lined up means pointing down the runway too, not just crossing the centreline.
+        const track = Math.atan2(c.s.velocity.x, -c.s.velocity.z) * (180 / Math.PI)
+        const trackError = Math.abs(((track - c.end.headingDeg + 540) % 360) - 180)
+        return Math.abs(g.lateral) < 40 && Math.abs(g.vertical) < 20 && trackError < 5
       },
       hold: 4,
       warning: guidanceWarning,
@@ -214,6 +364,7 @@ function landingSteps(): Step[] {
       keys: () => ['S', 'gently'],
       cue: (c) => pitchCue(c.s, c.t.flarePitchDeg - 2, c.t.flarePitchDeg + 2, [-5, c.t.tailStrikePitchDeg + 3]),
       met: (c) => c.s.onGround,
+      touchdown: true,
       warning: (c) => {
         if (c.s.pitchDeg > safePitchAtHeight(c.t, c.s.heightAboveGround)) return 'Too much nose-up: tail strike risk! Ease off S'
         if (c.s.heightAboveGround < c.t.flareHeight && c.s.verticalSpeed < -3) return 'Sinking fast: a little more back pressure (S)'
@@ -242,6 +393,23 @@ function landingSteps(): Step[] {
       },
     },
   ]
+  // The whole landing is the approach phase.
+  return steps.map((st) => ({ ...st, approach: true }))
+}
+
+const LESSON_NAME: Record<LessonMode, string> = { lessonTakeoff: 'take-off', lessonLanding: 'landing', lessonCircuit: 'circuit' }
+const LESSON_HEADLINE: Record<LessonMode, string> = {
+  lessonTakeoff: 'Take-off lesson complete!',
+  lessonLanding: 'Landing lesson complete!',
+  lessonCircuit: 'Circuit complete: take-off to touchdown!',
+}
+
+function lessonSteps(mode: LessonMode, id: AircraftId): Step[] {
+  if (mode === 'lessonTakeoff') return takeoffSteps(id)
+  if (mode === 'lessonLanding') return landingSteps()
+  // The circuit climbs to its own height instead of the take-off lesson's climb-out.
+  const takeoff = takeoffSteps(id).filter((st) => st.title !== 'Climb out')
+  return [...takeoff, ...circuitSteps(), ...landingSteps()]
 }
 
 /** A specific, encouraging tip for the way the flight ended. */
@@ -272,7 +440,7 @@ export function coachTip(reason: string | null, t: Technique): string {
 }
 
 export class LessonChallenge implements Challenge {
-  readonly mode: GameMode
+  readonly mode: LessonMode
   result: FlightResult | null = null
   readonly technique: Technique
   private readonly steps: Step[]
@@ -289,12 +457,17 @@ export class LessonChallenge implements Challenge {
   private prevVs = 0
   private lastState: AircraftState | null = null
 
-  constructor(mode: 'lessonTakeoff' | 'lessonLanding', aircraftId: AircraftId) {
+  constructor(mode: LessonMode, aircraftId: AircraftId) {
     this.mode = mode
     this.technique = techniqueFor(aircraftId)
     this.end = getRunwayEnd(this.technique.lessonPlace.airportId, this.technique.lessonPlace.runwayEnd)
-    this.steps = mode === 'lessonTakeoff' ? takeoffSteps(aircraftId) : landingSteps()
-    this.title = `${getAircraft(aircraftId).name} ${mode === 'lessonTakeoff' ? 'take-off' : 'landing'}`
+    this.steps = lessonSteps(mode, aircraftId)
+    this.title = `${getAircraft(aircraftId).name} ${LESSON_NAME[mode]}`
+  }
+
+  /** In the approach phase: the session's approach autothrust and flare assist work now. */
+  get approachAssists(): boolean {
+    return this.steps[Math.min(this.index, this.steps.length - 1)].approach === true
   }
 
   private ctx(s: AircraftState): StepContext {
@@ -305,8 +478,9 @@ export class LessonChallenge implements Challenge {
     if (this.result) return
     this.elapsed += dt
     this.lastState = s
-    const landing = this.mode === 'lessonLanding'
-    if (landing && this.touchdownSink === null) {
+    // The touchdown counts in the approach phase only (a circuit starts on the runway).
+    const approach = this.approachAssists
+    if (approach && this.touchdownSink === null) {
       if (s.onGround) this.touchdownSink = Math.max(0, -this.prevVs)
       else this.prevVs = s.verticalSpeed
     }
@@ -317,7 +491,8 @@ export class LessonChallenge implements Challenge {
     }
     // On the ground off the paved runway: a take-off excursion, a short or wide touchdown, or a landing-roll excursion.
     if (s.onGround && !inRect(this.end.runway.rect, s.position.x, s.position.z)) {
-      this.fail(landing && this.index <= 4 ? 'Missed the runway' : 'Runway excursion')
+      const beforeTouchdown = this.steps.slice(this.index).some((st) => st.touchdown)
+      this.fail(approach && beforeTouchdown ? 'Missed the runway' : 'Runway excursion')
       return
     }
 
@@ -397,7 +572,7 @@ export class LessonChallenge implements Challenge {
     this.result = {
       mode: this.mode,
       outcome: 'success',
-      headline: `${this.mode === 'lessonTakeoff' ? 'Take-off' : 'Landing'} lesson complete!`,
+      headline: LESSON_HEADLINE[this.mode],
       reason:
         this.warnings === 0
           ? 'Textbook. Try the same aircraft in the challenges next.'

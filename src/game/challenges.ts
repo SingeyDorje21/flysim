@@ -30,6 +30,8 @@ export interface Challenge {
   readonly result: FlightResult | null
   /** Flight School coach state; only lessons have one. */
   readonly lessonView?: LessonView
+  /** A lesson's approach phase: the session's approach autothrust and flare assist work while true. */
+  readonly approachAssists?: boolean
 }
 
 export const TAKEOFF_TARGET_AGL = 150
@@ -459,6 +461,7 @@ export function createChallenge(
       return new LandingChallenge(place, aircraftId)
     case 'lessonTakeoff':
     case 'lessonLanding':
+    case 'lessonCircuit':
       return new LessonChallenge(mode, aircraftId)
     case 'rings':
       if (!ringView) throw new Error('Ring course needs a ring view')

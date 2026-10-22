@@ -29,6 +29,8 @@ export function spawnFor(mode: GameMode, place: FlightPlace, aircraftId: Aircraf
   // Lessons fly the matching exercise at the aircraft's own lesson airport.
   if (mode === 'lessonTakeoff') return spawnFor('takeoff', techniqueFor(aircraftId).lessonPlace, aircraftId)
   if (mode === 'lessonLanding') return spawnFor('landing', techniqueFor(aircraftId).lessonPlace, aircraftId)
+  // The circuit starts like the take-off lesson: lined up on the lesson runway.
+  if (mode === 'lessonCircuit') return spawnFor('takeoff', techniqueFor(aircraftId).lessonPlace, aircraftId)
   const ac = getAircraft(aircraftId)
   const jet = ac.engineKind !== 'piston'
   if (mode === 'rings') {

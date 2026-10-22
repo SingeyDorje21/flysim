@@ -43,6 +43,48 @@ export interface Technique {
   /** Tail strike point relative to the main wheels: height above them and distance behind (m). */
   tailAboveMain: number
   tailBehindMain: number
+  /** The traffic circuit flown in the circuit lesson. */
+  circuit: CircuitPlan
+}
+
+/**
+ * A left-hand traffic circuit around the lesson runway: climb out, turn left
+ * onto crosswind, left again onto downwind (parallel to the runway, `offset`
+ * to its left), left onto base `finalLength` before the threshold, and left
+ * onto final. Sized from the turn radius at the circuit speed and 25 degrees
+ * of bank, so even the A350 has room for each turn.
+ */
+export interface CircuitPlan {
+  /** Circuit height above the field (m). */
+  height: number
+  /** Speed to fly the circuit legs at, clean (m/s); the turns are sized for it. */
+  speed: number
+  /** Downwind leg distance from the runway centreline (m). */
+  offset: number
+  /** Base leg distance before the threshold (m): the length of the final approach. */
+  finalLength: number
+  /** Turn radius at the circuit speed and 25 degrees of bank (m); turns start this far early. */
+  turnRadius: number
+}
+
+/** Circuit bank angle used to size the pattern (deg). */
+const CIRCUIT_BANK_DEG = 25
+
+function circuitPlan(speeds: { approach: number; rotate: number; stallClean: number }, jet: boolean): CircuitPlan {
+  // Clean: comfortably above the approach speed, the speed the flaps came up at and the clean stall.
+  const speed = Math.max(speeds.approach * 1.3, speeds.rotate * FLAPS_UP_FACTOR * 1.1, speeds.stallClean * 1.35)
+  const turnRadius = (speed * speed) / (9.81 * Math.tan((CIRCUIT_BANK_DEG * Math.PI) / 180))
+  // Downwind two turn radii out: room to roll out between the crosswind and downwind turns.
+  const offset = Math.max(1200, 2 * turnRadius)
+  return {
+    // 1,000 ft for the trainer, 1,500 ft for the jets.
+    height: jet ? 457.2 : 304.8,
+    speed,
+    offset,
+    // Long enough to roll out of the final turn and settle on the glide path for a minute.
+    finalLength: Math.max(2500, offset + 2 * turnRadius),
+    turnRadius,
+  }
 }
 
 /**
@@ -116,5 +158,6 @@ export function techniqueFor(id: AircraftId): Technique {
     notes: NOTES[id],
     tailAboveMain: ac.geometry.strikePoints.tail.y - ac.geometry.gear.mainLeft.y,
     tailBehindMain: ac.geometry.strikePoints.tail.z - ac.geometry.gear.mainLeft.z,
+    circuit: circuitPlan(ac.speeds, jet),
   }
 }

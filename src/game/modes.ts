@@ -81,6 +81,16 @@ export const GAME_MODES: readonly GameModeInfo[] = [
     objectives: ['Follow each step on the coach panel', 'Touch down gently and stop on the runway'],
     timeLimit: null,
   },
+  {
+    id: 'lessonCircuit',
+    kind: 'lesson',
+    name: 'Circuit Lesson',
+    tagline: 'Take off, fly a circuit and land, with a coach',
+    description:
+      'The full flight: take off, climb to circuit height, fly the crosswind, downwind and base legs around the airport, then line up and land on the same runway.',
+    objectives: ['Take off and fly each leg of the circuit', 'Land and stop on the runway you took off from'],
+    timeLimit: null,
+  },
 ]
 
 export function getModeInfo(mode: GameMode): GameModeInfo {
