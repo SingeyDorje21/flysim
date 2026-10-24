@@ -3,6 +3,7 @@
  * physics step and eventually produces a FlightResult. Pure TS, no React.
  */
 
+import { getAircraftConfig } from '../config/aircraft'
 import { getAircraft, type AircraftId } from '../config/aircraftCatalog'
 import type { AircraftState } from '../simulation/types'
 import {
@@ -288,9 +289,12 @@ class LandingChallenge extends BaseChallenge {
   private readonly end: RunwayEnd
   private readonly rect: OrientedRect
   private readonly startDist: number
+  /** Touchdown sink rate (m/s) above which this aircraft's landing counts as hard. */
+  private readonly hardSink: number
 
   constructor(place: FlightPlace, aircraftId: AircraftId) {
     super('landing')
+    this.hardSink = getAircraftConfig(aircraftId).crash.hardLandingSinkRate
     this.end = getRunwayEnd(place.airportId, place.runwayEnd)
     this.rect = this.end.runway.rect
     const start = spawnFor('landing', place, aircraftId).position
@@ -332,7 +336,7 @@ class LandingChallenge extends BaseChallenge {
       { label: 'Touchdown speed', value: td.speed, kind: 'speed' },
     ]
     const sinkPenalty = Math.max(0, td.sink - 0.8) * 180
-    const hard = td.sink > 3 ? 'Hard touchdown' : null
+    const hard = td.sink > this.hardSink ? 'Hard touchdown' : null
     if (td.on.kind !== 'target') {
       // Safe but not where you were cleared to land: a fraction of the touchdown score.
       const p = td.on

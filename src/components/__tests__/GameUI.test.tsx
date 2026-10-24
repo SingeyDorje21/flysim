@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AIRCRAFT_IDS, getAircraft } from '../../config/aircraftCatalog'
 import type { FlightResult } from '../../game/types'
+import { useAutopilotStore } from '../../state/autopilotStore'
 import { DEFAULT_SETTINGS, useGameStore } from '../../state/gameStore'
 import { INITIAL_TELEMETRY, publishTelemetry, resetTelemetry } from '../../state/telemetry'
 import { GameUI } from '../GameUI'
@@ -132,6 +133,32 @@ describe('flight screen', () => {
     expect(screen.getByTestId('hud-airspeed').textContent).toBe('97 kt')
     expect(screen.getByTestId('hud-altitude').textContent).toBe('3,281 ft')
     expect(screen.getByTestId('hud-agl').textContent).toBe('328 ft')
+  })
+
+  it('shows the landing coach on approach and the touchdown verdict after landing', () => {
+    reset({ screen: 'flight' })
+    render(<GameUI />)
+    expect(screen.queryByTestId('landing-coach')).toBeNull()
+    act(() => {
+      publishTelemetry({
+        ...INITIAL_TELEMETRY,
+        onGround: false,
+        heightAboveGround: 120,
+        airspeed: 60,
+        verticalSpeed: -2,
+        gearPosition: 1,
+        nav: { nearest: null, approach: { code: 'FSCF', runway: '36', distance: 2000, lateral: 0, vertical: 0 } },
+      })
+    })
+    expect(screen.getByTestId('landing-coach').textContent).toMatch(/too fast/i)
+    // Quiet while the landing assist flies the approach.
+    act(() => useAutopilotStore.setState({ assist: { runway: 'FSCF 36', lateral: 0, vertical: 0, goingAround: false } }))
+    expect(screen.queryByTestId('landing-coach')).toBeNull()
+    act(() => useAutopilotStore.setState({ assist: null }))
+    act(() => {
+      publishTelemetry({ ...INITIAL_TELEMETRY, onGround: true, simTime: 10, touchdown: { sink: 0.4, simTime: 9 } })
+    })
+    expect(screen.getByTestId('landing-verdict').textContent).toContain('Smooth landing!')
   })
 
   it('uses metric units', () => {

@@ -336,7 +336,10 @@ export interface AircraftConfig {
   }
 
   crash: {
-    /** Gear touchdown sink rate (m/s) above which the landing is a crash. */
+    /**
+     * Gear touchdown sink rate (m/s) above which the landing is hard: it scores
+     * badly, and GEAR_FAILURE_FACTOR times it breaks the gear (a crash).
+     */
     hardLandingSinkRate: number
     /** Ground contact on slopes steeper than this ends the flight. */
     maxSlopeDeg: number

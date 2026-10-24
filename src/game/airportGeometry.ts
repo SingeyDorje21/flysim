@@ -308,30 +308,40 @@ export function guidanceTo(end: RunwayEnd, x: number, y: number, z: number): App
   return { end, distance, lateral, vertical }
 }
 
+export interface ApproachOptions {
+  /** Take this runway end whenever it qualifies (the one the pilot chose). */
+  prefer?: RunwayEnd
+  /** Skip runways shorter than this (m). */
+  minLength?: number
+}
+
 /**
  * The runway end the aircraft is most plausibly approaching: in front of it,
  * within range and roughly aligned. Null when there is none.
  */
-export function approachGuidance(x: number, y: number, z: number, headingDeg: number): ApproachGuidance | null {
+export function approachGuidance(
+  x: number,
+  y: number,
+  z: number,
+  headingDeg: number,
+  options: ApproachOptions = {},
+): ApproachGuidance | null {
   let best: ApproachGuidance | null = null
   let bestScore = Infinity
   for (const a of AIRPORTS) {
     for (const end of runwayEnds(a)) {
-      const d = headingVector(end.headingDeg)
-      const dx = x - end.threshold.x
-      const dz = z - end.threshold.z
-      const distance = -(dx * d.x + dz * d.z)
-      if (distance < -end.runway.def.length || distance > APPROACH_RANGE) continue
-      const lateral = dx * -d.z + dz * d.x
-      if (Math.abs(lateral) > Math.max(1500, distance * 0.25)) continue
+      if (options.minLength !== undefined && end.runway.def.length < options.minLength) continue
+      const g = guidanceTo(end, x, y, z)
+      if (g.distance < -end.runway.def.length || g.distance > APPROACH_RANGE) continue
+      if (Math.abs(g.lateral) > Math.max(1500, g.distance * 0.25)) continue
       const headingError = Math.abs(((headingDeg - end.headingDeg + 540) % 360) - 180)
       if (headingError > 60) continue
-      const toAim = distance + Math.hypot(end.aimPoint.x - end.threshold.x, end.aimPoint.z - end.threshold.z)
-      const vertical = y - a.elevation - Math.max(0, toAim) * Math.tan(GLIDE_SLOPE_DEG * DEG)
-      const score = Math.abs(lateral) + headingError * 20 + Math.max(0, distance) * 0.05
+      const p = options.prefer
+      if (p && end.airport.id === p.airport.id && end.designator === p.designator) return g
+      const score = Math.abs(g.lateral) + headingError * 20 + Math.max(0, g.distance) * 0.05
       if (score < bestScore) {
         bestScore = score
-        best = { end, distance, lateral, vertical }
+        best = g
       }
     }
   }

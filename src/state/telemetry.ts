@@ -63,6 +63,8 @@ export interface TelemetrySnapshot {
   reverse: number
   /** Flight School coach state while a lesson runs, else null. */
   lesson: LessonView | null
+  /** The most recent touchdown this flight: sink rate (m/s, positive) and when (sim s). */
+  touchdown: { sink: number; simTime: number } | null
 }
 
 export interface NavInfo {
@@ -114,6 +116,7 @@ export const INITIAL_TELEMETRY: Readonly<TelemetrySnapshot> = deepFreeze({
   speedbrake: 0,
   reverse: 0,
   lesson: null,
+  touchdown: null,
 })
 
 function deepFreeze<T extends object>(obj: T): T {

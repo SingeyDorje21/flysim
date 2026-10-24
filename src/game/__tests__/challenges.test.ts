@@ -171,9 +171,10 @@ describe('landing challenge', () => {
     expect(sink?.value).toBeCloseTo(-0.6, 5)
   })
 
-  it('penalises a hard touchdown', () => {
+  it('penalises a touchdown harder than the aircraft limit', () => {
+    // The trainer's limit is 4.5 m/s; physics only breaks the gear at 1.8x that.
     const c = createChallenge('landing')
-    c.update(makeState({ onGround: false, position: { x: 0, y: 14, z: 500 }, verticalSpeed: -3.5 }), DT)
+    c.update(makeState({ onGround: false, position: { x: 0, y: 14, z: 500 }, verticalSpeed: -5 }), DT)
     c.update(makeState({ onGround: true, position: { x: 0, y: 13, z: 500 }, airspeed: 30 }), DT)
     steps(120, () => c.update(makeState({ onGround: true, position: { x: 0, y: 13, z: 100 }, groundSpeed: 0 }), DT))
     expect(c.result?.outcome).toBe('success')

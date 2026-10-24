@@ -267,11 +267,11 @@ describe('landing gear', () => {
   })
 
   it.each([
-    ['a350', 2.5, 4.5],
-    ['a220', 2.5, 4.5],
-    ['global8000', 2.5, 4.5],
-    ['f22', 3, 5],
-  ] as [AircraftId, number, number][])('%s: a %s m/s touchdown survives, %s m/s is a hard landing', (id, soft, hard) => {
+    ['a350', 5, 7.5],
+    ['a220', 5, 7.5],
+    ['global8000', 5, 7.5],
+    ['f22', 6, 8.5],
+  ] as [AircraftId, number, number][])('%s: a hard %s m/s touchdown survives, %s m/s breaks the gear', (id, soft, hard) => {
     const touch = (sink: number) => {
       const info = getAircraft(id)
       const sim = makeAircraft(

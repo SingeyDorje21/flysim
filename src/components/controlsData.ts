@@ -16,7 +16,7 @@ export const FLIGHT_BINDINGS: readonly Binding[] = [
   { action: 'Speed brake toggle', keys: 'V' },
   { action: 'Reverse thrust (hold, on the ground)', keys: 'Y' },
   { action: 'Elevator trim nose up / down', keys: '. / ,' },
-  { action: 'Landing assist: line up with the runway ahead, then hand over (press again to cancel)', keys: '0' },
+  { action: 'Landing assist: fly the approach to the runway ahead down to 100 ft, then hand over for the flare (press again to cancel)', keys: '0' },
 ]
 
 /** F-22 afterburner has no key: it lights at full throttle. */

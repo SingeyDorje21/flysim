@@ -111,6 +111,11 @@ const NZ_INTEGRAL_MAX = 2
 const NZ_INTEGRAL_WINDOW = 1
 /** After a stick release the holds keep re-latching while the rate transient lasts (s, rad/s). */
 const RELEASE_LATCH_TIME = 3
+/**
+ * A touchdown faster than the aircraft's hard-landing sink rate is a hard (but
+ * survivable) landing; only this multiple of it breaks the gear and ends the flight.
+ */
+export const GEAR_FAILURE_FACTOR = 1.8
 /** Fly-by-wire flare mode arms below this wheel height (m, ~50 ft) when descending with the gear down. */
 const FLARE_MODE_HEIGHT = 15
 /** Steepest path neutral stick holds in flare mode: a gentle descent (-1.5 deg, ~1.7 m/s at 65 m/s). */
@@ -1158,7 +1163,7 @@ export class AircraftPhysics implements FlightModel {
       // Judged by how fast the wheel closes on the ground along its normal, so a touchdown
       // parallel to a sloping field (vertical speed = ground speed x grade) is not a crash
       // and running into rising ground is.
-      const sinkLimit = cfg.crash.hardLandingSinkRate * (gd.main ? 1 : 2)
+      const sinkLimit = cfg.crash.hardLandingSinkRate * GEAR_FAILURE_FACTOR * (gd.main ? 1 : 2)
       if (detectTouchdown && !this.gearContact[i] && this.groundClosure(px, pz, vcx, vcy, vcz) > sinkLimit) {
         this.flagHardLanding = true
       }

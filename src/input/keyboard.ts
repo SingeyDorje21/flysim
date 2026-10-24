@@ -114,6 +114,11 @@ export class KeyboardControls {
     this.flapIndex = best
   }
 
+  /** Speed brake switch: 1 = out (the landing assist leaves it in when it hands over). */
+  setSpeedbrake(value: number): void {
+    this.speedbrake = value > 0.5 ? 1 : 0
+  }
+
   /** Gear lever: 1 = down. */
   setGear(lever: number): void {
     this.gear = lever > 0.5 ? 1 : 0

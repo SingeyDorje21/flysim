@@ -8,6 +8,7 @@ import { ApproachIndicator } from './Approach'
 import { CoachPanel } from './Coach'
 import { formatAltitude, formatDistance, formatSpeed, formatTime, formatVerticalSpeed } from './format'
 import { Minimap } from './Minimap'
+import { LandingCoach } from './LandingCoach'
 import './Hud.css'
 
 const CAMERA_LABEL: Record<CameraMode, string> = { chase: 'Chase', cockpit: 'Cockpit', free: 'Free' }
@@ -228,7 +229,7 @@ export function Hud() {
 
       <HeadingTape heading={t.headingDeg} />
 
-      {nav.approach && <ApproachIndicator approach={nav.approach} units={units} assisting={assist !== null} />}
+      {nav.approach && <ApproachIndicator approach={nav.approach} units={units} assisting={assist !== null} goingAround={assist?.goingAround ?? false} />}
 
       <div className="hud-box hud-left">
         <div className="hud-label">AIRSPEED</div>
@@ -248,6 +249,8 @@ export function Hud() {
           <span>{t.gForce.toFixed(1)}</span>
         </div>
       </div>
+
+      <LandingCoach />
 
       <dl className="hud-commands" aria-label="Key commands">
         {HUD_COMMANDS.map(([keys, action]) => (

@@ -95,7 +95,7 @@ export function HowItWorks() {
             <li>Aim for a steady descent of about 500 ft/min towards the white touchdown markers.</li>
             <li>Just above the runway, cut the power (<kbd>F</kbd>) and gently raise the nose to flare.</li>
             <li>
-              Touch down softly. More than about 900 ft/min is a crash. Then hold <kbd>B</kbd> to brake to a stop.
+              Touch down softly. A hard landing costs points and a very hard one breaks the gear. Then hold <kbd>B</kbd> to brake to a stop.
             </li>
             <li>A wingtip, the tail or the propeller touching the ground ends the flight.</li>
           </ul>

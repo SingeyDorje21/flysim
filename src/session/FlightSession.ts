@@ -12,7 +12,7 @@ import type { AutopilotTargets, TargetField } from '../autopilot/types'
 import { getAircraftConfig } from '../config/aircraft'
 import type { AircraftId } from '../config/aircraftCatalog'
 import { GRAVITY } from '../simulation/atmosphere'
-import { approachGuidance, nearestAirport } from '../game/airportGeometry'
+import { approachGuidance, getRunwayEnd, nearestAirport } from '../game/airportGeometry'
 import { createChallenge, type Challenge } from '../game/challenges'
 import { HOME_PLACE, spawnFor, type FlightPlace } from '../game/spawns'
 import { safePitchAtHeight, techniqueFor, type Technique } from '../game/technique'
@@ -79,6 +79,7 @@ export class FlightSession {
   private assistsSetting = true
   private landed = false
   private flared = false
+  private lastTouchdown: { sink: number; simTime: number } | null = null
   /** A lesson's approach phase (approach autothrust and flare assist), as of the last step. */
   private approachPhase = false
   private autothrustIntegral = 0
@@ -163,6 +164,7 @@ export class FlightSession {
     this.reported = false
     this.landed = false
     this.flared = false
+    this.lastTouchdown = null
     this.approachPhase = false
     this.autothrustIntegral = 0
     this.autothrustBase = this.physics.state.controls.throttle
@@ -405,7 +407,8 @@ export class FlightSession {
       return
     }
     const s = this.physics.state
-    const refusal = this.landingAssist.engage(s)
+    // The runway the pilot chose wins whenever it is the one ahead.
+    const refusal = this.landingAssist.engage(s, getRunwayEnd(this.place.airportId, this.place.runwayEnd))
     if (refusal) {
       useAutopilotStore.setState({ message: refusal })
       return
@@ -420,7 +423,14 @@ export class FlightSession {
     this.keyboard.setFlaps(getAircraft(this.aircraftId).landingFlaps)
   }
 
-  private stopAssist(message: string): void {
+  /**
+   * Let go of the controls: the stick the assist last held (by default, the
+   * one applied on the previous step) moves into the trim, and the speed brake
+   * switch is left in.
+   */
+  private stopAssist(message: string, held: { pitch: number; trim: number } = this.physics.state.controls): void {
+    this.handOverTrimmed(held.pitch, held.trim)
+    this.keyboard.setSpeedbrake(0)
     this.landingAssist.cancel()
     this.apDisconnectCount++
     useAutopilotStore.setState({ assist: null, message })
@@ -452,16 +462,16 @@ export class FlightSession {
     controls.flaps = getAircraft(this.aircraftId).landingFlaps
     this.keyboard.setGear(1)
     this.keyboard.setFlaps(controls.flaps)
-    const release = this.landingAssist.update(s, controls, dt)
+    const event = this.landingAssist.update(s, controls, dt)
     this.keyboard.setThrottle(controls.throttle)
     this.assistThrottle = controls.throttle
-    if (!release) return
-    this.handOverTrimmed(controls.pitch, controls.trim)
-    this.stopAssist(
-      release === 'aligned'
-        ? `Lined up with ${runway} on the glide path: you have control`
-        : `Landing assist off below 200 ft: you have control`,
-    )
+    if (event === 'goAround') {
+      useAutopilotStore.setState({ message: 'Unstable approach: going around' })
+    } else if (event === 'stable') {
+      this.stopAssist(`Stable at 100 ft on ${runway}: flare and land, you have control`, controls)
+    } else if (event === 'goAroundDone') {
+      this.stopAssist('Go-around complete: you have control. Press 0 to try again', controls)
+    }
   }
 
   private readonly stepOnce = (dt: number): void => {
@@ -482,9 +492,14 @@ export class FlightSession {
     this.applyFlareAssist(controls)
     // The tail-strike guard has the final say over pitch.
     if (this.assistsActive) this.applyTailStrikeGuard(controls)
-    this.applyApproachAutothrust(controls, dt)
+    // The landing assist runs its own autothrust; the lesson's would fight it.
+    if (!this.landingAssist.active) this.applyApproachAutothrust(controls, dt)
     this.physics.setControls(controls)
     this.physics.step()
+    const prev = this.physics.previousState
+    if (this.physics.state.onGround && !prev.onGround) {
+      this.lastTouchdown = { sink: Math.max(0, -prev.verticalSpeed), simTime: this.physics.state.simTime }
+    }
     this.keyboard.syncGear(this.physics.state.controls.gear)
     this.challenge.update(this.physics.state, dt)
   }
@@ -559,6 +574,7 @@ export class FlightSession {
       speedbrake: s.speedbrakePosition,
       reverse: s.controls.reverse,
       lesson: this.challenge.lessonView ?? null,
+      touchdown: this.lastTouchdown,
     })
   }
 
