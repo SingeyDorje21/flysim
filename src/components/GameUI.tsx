@@ -1,10 +1,10 @@
 import { useId, useState, type ReactNode } from 'react'
 import { QUALITY_LEVELS } from '../config/quality'
 import { GAME_MODES } from '../game/modes'
-import { CAMERA_MODES, LESSON_MODES } from '../game/types'
+import { CAMERA_MODES, LESSON_MODES, type GameMode } from '../game/types'
 import { useGameStore, type Units } from '../state/gameStore'
 import { TIMES_OF_DAY } from '../world/types'
-import { AirportPicker, SelectionSummary } from './AirportPicker'
+import { AirportPicker, SetupSummary } from './AirportPicker'
 import { AFTERBURNER_NOTE, ALL_BINDINGS } from './controlsData'
 import { formatStat, formatTime } from './format'
 import { FlightSchool } from './FlightSchool'
@@ -12,46 +12,18 @@ import { Hangar } from './Hangar'
 import { HowItWorks } from './HowItWorks'
 import { Hud } from './Hud'
 import { InstrumentPanel } from './Instruments'
+import { MainMenu } from './MainMenu'
 import { WorldMap } from './WorldMap'
 import './GameUI.css'
 
-const AIRPORT_MODES: ReadonlySet<string> = new Set(['freeFlight', 'takeoff', 'landing'])
-
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 
-function MainMenu() {
-  const goToModeSelect = useGameStore((s) => s.goToModeSelect)
-  const goToFlightSchool = useGameStore((s) => s.goToFlightSchool)
-  const startFlight = useGameStore((s) => s.startFlight)
-  const openOverlay = useGameStore((s) => s.openOverlay)
-  return (
-    <div className="screen screen-center">
-      <div className="panel menu-panel">
-        <h1 className="title">FlySim</h1>
-        <p className="subtitle">Island flight simulator</p>
-        <div className="menu-buttons">
-          <button type="button" className="btn primary" onClick={goToModeSelect}>
-            Fly
-          </button>
-          <button type="button" className="btn primary school-btn" onClick={goToFlightSchool}>
-            Flight School
-          </button>
-          <button type="button" className="btn" onClick={() => startFlight('freeFlight')}>
-            Quick Flight
-          </button>
-          <button type="button" className="btn" onClick={() => openOverlay('howItWorks')}>
-            How It Works
-          </button>
-          <button type="button" className="btn" onClick={() => openOverlay('settings')}>
-            Settings
-          </button>
-          <button type="button" className="btn" onClick={() => openOverlay('controls')}>
-            Controls
-          </button>
-        </div>
-      </div>
-    </div>
-  )
+/** Where each challenge puts you: on the chosen runway, landing on it, or a fixed course. */
+const MODE_WHERE: Partial<Record<GameMode, string>> = {
+  freeFlight: 'Starts on your runway',
+  takeoff: 'Starts on your runway',
+  landing: 'Lands on your runway',
+  rings: 'Fixed course',
 }
 
 function ModeSelect() {
@@ -68,32 +40,32 @@ function ModeSelect() {
       </div>
       <Hangar />
       <AirportPicker />
+      <div className="mode-setup">
+        <span className="ready-label">Your setup</span>
+        <SetupSummary />
+      </div>
       <div className="mode-grid">
         {GAME_MODES.filter((m) => m.kind === 'challenge').map((m) => {
           const best = bestScores[m.id]
+          const where = MODE_WHERE[m.id]
           return (
             <article key={m.id} className="panel mode-card" aria-label={m.name}>
               <h3>{m.name}</h3>
               <p className="tagline">{m.tagline}</p>
-              <p className="desc">{m.description}</p>
               <ul className="objectives">
                 {m.objectives.map((o) => (
                   <li key={o}>{o}</li>
                 ))}
               </ul>
-              {AIRPORT_MODES.has(m.id) && (
-                <SelectionSummary label={m.id === 'landing' ? 'Destination' : 'Airport'} />
-              )}
-              <dl className="mode-meta">
-                <div>
-                  <dt>Time limit</dt>
-                  <dd>{m.timeLimit === null ? 'None' : formatTime(m.timeLimit)}</dd>
-                </div>
-                <div>
-                  <dt>Best score</dt>
-                  <dd>{best === undefined ? '—' : Math.round(best)}</dd>
-                </div>
-              </dl>
+              <div className="mode-chips">
+                {where && (
+                  <span className={m.id === 'rings' ? 'chip fixed' : 'chip'} data-testid="mode-where">
+                    {where}
+                  </span>
+                )}
+                <span className="chip">{m.timeLimit === null ? 'No time limit' : `${formatTime(m.timeLimit)} limit`}</span>
+                {best !== undefined && <span className="chip best">Best {Math.round(best)}</span>}
+              </div>
               <button
                 type="button"
                 className="btn primary"

@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { AIRCRAFT, type AircraftId, type AircraftInfo } from '../config/aircraftCatalog'
+import { AIRCRAFT, getAircraft, type AircraftId, type AircraftInfo } from '../config/aircraftCatalog'
 import { useGameStore } from '../state/gameStore'
 
 /** Simple top-view silhouettes (viewBox 100x60, nose to the right). No logos. */
@@ -24,74 +23,60 @@ export function AircraftIcon({ id }: { id: AircraftId }) {
   )
 }
 
-function AircraftCard({ a, selected, onSelect }: { a: AircraftInfo; selected: boolean; onSelect: () => void }) {
-  const [open, setOpen] = useState(false)
+function AircraftTile({ a, selected, onSelect }: { a: AircraftInfo; selected: boolean; onSelect: () => void }) {
   return (
-    <article
-      className={selected ? 'aircraft-card selected' : 'aircraft-card'}
-      aria-label={a.name}
+    <button
+      type="button"
+      className={selected ? 'aircraft-tile selected' : 'aircraft-tile'}
+      aria-pressed={selected}
+      aria-label={`Select ${a.name}`}
       data-testid={`aircraft-card-${a.id}`}
       data-selected={selected ? 'true' : 'false'}
+      onClick={onSelect}
     >
-      <div className="aircraft-head">
-        <AircraftIcon id={a.id} />
-        <div>
-          <h4>{a.name}</h4>
-          <div className="aircraft-sub">
-            {a.manufacturer} · {a.role}
-          </div>
-        </div>
-      </div>
-      <p className="aircraft-blurb">{a.blurb}</p>
-      <button
-        type="button"
-        className="link-btn"
-        aria-expanded={open}
-        aria-label={`${open ? 'Hide' : 'Show'} specs for ${a.name}`}
-        onClick={() => setOpen(!open)}
-      >
-        {open ? 'Hide specs' : 'Specs'}
-      </button>
-      {open && (
-        <>
-          <dl className="aircraft-specs">
-            {a.specs.map((s) => (
-              <div key={s.label}>
-                <dt>{s.label}</dt>
-                <dd>{s.value}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="aircraft-sources">Sources: {a.sources.join('; ')}</p>
-        </>
-      )}
-      <button
-        type="button"
-        className={selected ? 'btn primary' : 'btn'}
-        aria-pressed={selected}
-        aria-label={`Select ${a.name}`}
-        onClick={onSelect}
-      >
-        {selected ? 'Selected' : 'Select'}
-      </button>
-    </article>
+      <AircraftIcon id={a.id} />
+      <span className="aircraft-tile-name">{a.name}</span>
+      <span className="aircraft-sub">{a.role}</span>
+    </button>
   )
 }
 
-/** Aircraft picker ("hangar"): one card per type; the choice persists in the game store. */
+/** Blurb, published specs and sources for the selected aircraft. */
+function AircraftDetail({ a }: { a: AircraftInfo }) {
+  return (
+    <div className="aircraft-detail" data-testid="aircraft-detail" key={a.id}>
+      <div>
+        <h4>
+          {a.manufacturer} {a.name}
+        </h4>
+        <p className="aircraft-blurb">{a.blurb}</p>
+      </div>
+      <dl className="aircraft-specs">
+        {a.specs.map((s) => (
+          <div key={s.label}>
+            <dt>{s.label}</dt>
+            <dd>{s.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="aircraft-sources">Sources: {a.sources.join('; ')}</p>
+    </div>
+  )
+}
+
+/** Aircraft picker ("hangar"): one tile per type and the selected one's details; the choice persists in the game store. */
 export function Hangar() {
   const aircraftId = useGameStore((s) => s.aircraftId)
   const selectAircraft = useGameStore((s) => s.selectAircraft)
   return (
     <section className="panel hangar" aria-label="Hangar">
-      <div className="picker-head">
-        <h3>Hangar</h3>
-      </div>
+      <h3>Aircraft</h3>
       <div className="aircraft-grid">
         {AIRCRAFT.map((a) => (
-          <AircraftCard key={a.id} a={a} selected={a.id === aircraftId} onSelect={() => selectAircraft(a.id)} />
+          <AircraftTile key={a.id} a={a} selected={a.id === aircraftId} onSelect={() => selectAircraft(a.id)} />
         ))}
       </div>
+      <AircraftDetail a={getAircraft(aircraftId)} />
     </section>
   )
 }

@@ -27,9 +27,12 @@ describe('airport picker', () => {
     expect(screen.getByRole('radio', { name: 'FSHI Harbor International' }).getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('radio', { name: 'Runway 27R' }))
     expect(state().runwayEnd).toBe('27R')
+    // One setup summary for the whole screen, not a copy per card.
+    expect(screen.getAllByTestId('selection-line')).toHaveLength(1)
+    expect(screen.getByTestId('selection-line').textContent).toContain('FSHI')
+    expect(screen.getByTestId('selection-line').textContent).toContain('RWY 27R')
     const landing = screen.getByRole('article', { name: 'Landing Challenge' })
-    expect(within(landing).getByTestId('selection-line').textContent).toContain('FSHI')
-    expect(within(landing).getByTestId('selection-line').textContent).toContain('RWY 27R')
+    expect(within(landing).getByTestId('mode-where').textContent).toBe('Lands on your runway')
     fireEvent.click(screen.getByRole('button', { name: 'Start Landing Challenge' }))
     expect(state().screen).toBe('flight')
     expect(state().mode).toBe('landing')
@@ -37,11 +40,11 @@ describe('airport picker', () => {
     expect(state().runwayEnd).toBe('27R')
   })
 
-  it('does not show the selection on the fixed ring course', () => {
+  it('marks the ring course as a fixed course that ignores the selection', () => {
     useGameStore.setState({ screen: 'modeSelect' })
     render(<GameUI />)
     const rings = screen.getByRole('article', { name: /Ring/ })
-    expect(within(rings).queryByTestId('selection-line')).toBeNull()
+    expect(within(rings).getByTestId('mode-where').textContent).toBe('Fixed course')
   })
 })
 
@@ -58,6 +61,26 @@ describe('world map', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(state().overlay).toBe('none')
     expect(screen.queryByTestId('world-map')).toBeNull()
+  })
+
+  it('runway-end markers pick the end, and hovering an airport shows its card', () => {
+    useGameStore.setState({ screen: 'modeSelect' })
+    useGameStore.getState().openOverlay('map')
+    render(<GameUI />)
+    fireEvent.click(screen.getByTestId('map-end-18'))
+    expect(state().airportId).toBe('central')
+    expect(state().runwayEnd).toBe('18')
+    expect(screen.getByTestId('map-end-18').getAttribute('class')).toContain('active')
+    expect(screen.queryByTestId('map-tooltip')).toBeNull()
+    fireEvent.pointerOver(screen.getByTestId('map-airport-FSHI').firstElementChild as Element)
+    expect(screen.getByTestId('map-tooltip').textContent).toContain('Harbor International')
+  })
+
+  it('hides the runway-end markers in flight', () => {
+    useGameStore.setState({ screen: 'flight' })
+    useGameStore.getState().openOverlay('map')
+    render(<GameUI />)
+    expect(screen.queryByTestId('map-end-36')).toBeNull()
   })
 
   it('clicking an airport selects it only when not in flight', () => {

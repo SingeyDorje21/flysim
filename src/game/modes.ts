@@ -19,7 +19,7 @@ export const GAME_MODES: readonly GameModeInfo[] = [
     name: 'Free Flight',
     tagline: 'Explore the island at your own pace',
     description:
-      'Start on runway 36 with the engine idling. Take off, explore the island and land wherever you dare. No time limit.',
+      'Start on your chosen runway with the engine idling. Take off, explore the island and land wherever you dare. No time limit.',
     objectives: ['No objectives - just fly', 'The flight ends only if you crash or quit'],
     timeLimit: null,
   },
@@ -29,7 +29,7 @@ export const GAME_MODES: readonly GameModeInfo[] = [
     name: 'Take-off Challenge',
     tagline: 'Get airborne and climb out cleanly',
     description:
-      'Line up on runway 36 with one notch of flaps. Apply full power, rotate at around 55 knots and climb to 500 ft above the ground.',
+      'Line up on your chosen runway with take-off flaps. Apply full power, rotate at the aircraft rotation speed and climb to 500 ft above the ground.',
     objectives: [
       'Stay on the runway until you lift off',
       'Climb to 500 ft (150 m) above the ground',
@@ -41,7 +41,7 @@ export const GAME_MODES: readonly GameModeInfo[] = [
     id: 'landing',
     kind: 'challenge',
     name: 'Landing Challenge',
-    tagline: 'Bring it down gently on runway 36',
+    tagline: 'Bring it down gently on your chosen runway',
     description:
       'You are on a 3-degree final approach, 2 miles out. Land on the runway, ideally near the aiming point, and stop on the paved surface.',
     objectives: [

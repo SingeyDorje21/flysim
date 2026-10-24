@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { AIRCRAFT_IDS, getAircraft } from '../../config/aircraftCatalog'
 import type { FlightResult } from '../../game/types'
 import { DEFAULT_SETTINGS, useGameStore } from '../../state/gameStore'
 import { INITIAL_TELEMETRY, publishTelemetry, resetTelemetry } from '../../state/telemetry'
@@ -63,6 +64,36 @@ describe('main menu', () => {
     expect(state().screen).toBe('modeSelect')
   })
 
+  it('aircraft arrows cycle the selected aircraft, wrapping at both ends', () => {
+    reset({ aircraftId: 'trainer' })
+    render(<GameUI />)
+    click('Next aircraft')
+    expect(state().aircraftId).toBe('f22')
+    expect(screen.getByTestId('ready-aircraft').textContent).toBe(getAircraft('f22').name)
+    click('Previous aircraft')
+    click('Previous aircraft')
+    expect(state().aircraftId).toBe(AIRCRAFT_IDS[AIRCRAFT_IDS.length - 1])
+  })
+
+  it('time-of-day chips update the setting', () => {
+    render(<GameUI />)
+    const group = screen.getByRole('radiogroup', { name: 'Time of day' })
+    fireEvent.click(within(group).getByRole('radio', { name: 'Evening' }))
+    expect(state().settings.timeOfDay).toBe('evening')
+    expect(within(group).getByRole('radio', { name: 'Evening' }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('pilot log lists best scores, or an empty note', () => {
+    render(<GameUI />)
+    expect(screen.getByText(/No scores yet/)).toBeTruthy()
+    cleanup()
+    reset({ bestScores: { landing: 812.4 } })
+    render(<GameUI />)
+    const log = screen.getByRole('region', { name: 'Pilot log' })
+    expect(within(log).getByText('Landing Challenge')).toBeTruthy()
+    expect(within(log).getByText('812')).toBeTruthy()
+  })
+
   it('Quick Flight starts free flight', () => {
     render(<GameUI />)
     click('Quick Flight')
@@ -76,7 +107,8 @@ describe('mode select', () => {
     reset({ screen: 'modeSelect', bestScores: { landing: 640 } })
     render(<GameUI />)
     expect(screen.getByText('Landing Challenge')).toBeTruthy()
-    expect(screen.getByText('640')).toBeTruthy()
+    expect(screen.getByText('Best 640')).toBeTruthy()
+    expect(screen.getAllByText(/^Best /)).toHaveLength(1)
     fireEvent.click(within(screen.getByRole('article', { name: 'Landing Challenge' })).getByRole('button', { name: /Start/ }))
     expect(state().screen).toBe('flight')
     expect(state().mode).toBe('landing')

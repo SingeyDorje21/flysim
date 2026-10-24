@@ -1,0 +1,229 @@
+/* ---- Main menu ---- */
+.main-menu {
+  pointer-events: auto;
+  overflow-y: auto;
+  --sky-top: #2f7fd6;
+  --sky-bottom: #a8d8ff;
+  --sun: #fff6d8;
+  --sun-x: 70%;
+  --sun-y: 14%;
+  --land: #2f5a3a;
+  --sea: #1f5f8f;
+  --cloud: #fff;
+}
+.main-menu.tod-morning { --sky-top: #3d6fa8; --sky-bottom: #f7c9a0; --sun: #ffe2b0; --sun-x: 50%; --sun-y: 30%; --land: #34553c; --sea: #2c6189; --cloud: #fff1e6; }
+.main-menu.tod-evening { --sky-top: #1c1b48; --sky-bottom: #e8784a; --sun: #ffb36b; --sun-x: 53%; --sun-y: 64%; --land: #1f2a2c; --sea: #2b2f55; --cloud: #e9a99a; }
+
+/* Backdrop layers; --mx/--my (-1..1) follow the pointer for parallax. */
+.menu-sky {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(to bottom, var(--sky-top), var(--sky-bottom) 72%);
+}
+.menu-sun {
+  position: absolute;
+  left: var(--sun-x);
+  top: var(--sun-y);
+  width: 320px;
+  height: 320px;
+  margin: -160px 0 0 -160px;
+  background: radial-gradient(
+    circle,
+    var(--sun) 14%,
+    color-mix(in srgb, var(--sun) 35%, transparent) 24%,
+    transparent 70%
+  );
+  transform: translate(calc(var(--mx) * -6px), calc(var(--my) * -4px));
+  transition: left 0.8s, top 0.8s;
+}
+.menu-clouds {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 60%;
+  background-repeat: repeat-x;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.menu-clouds.far {
+  opacity: 0.45;
+  background-image:
+    radial-gradient(ellipse 90px 22px at 120px 90px, var(--cloud) 60%, transparent 62%),
+    radial-gradient(ellipse 60px 18px at 160px 76px, var(--cloud) 60%, transparent 62%),
+    radial-gradient(ellipse 110px 24px at 520px 150px, var(--cloud) 60%, transparent 62%),
+    radial-gradient(ellipse 70px 20px at 560px 134px, var(--cloud) 60%, transparent 62%);
+  background-size: 800px 100%;
+  animation-name: menu-drift-far;
+  animation-duration: 120s;
+  transform: translate(calc(var(--mx) * -8px), calc(var(--my) * -4px));
+}
+.menu-clouds.near {
+  opacity: 0.8;
+  background-image:
+    radial-gradient(ellipse 150px 34px at 300px 230px, var(--cloud) 60%, transparent 62%),
+    radial-gradient(ellipse 90px 30px at 360px 206px, var(--cloud) 60%, transparent 62%),
+    radial-gradient(ellipse 130px 30px at 980px 300px, var(--cloud) 60%, transparent 62%),
+    radial-gradient(ellipse 80px 26px at 930px 282px, var(--cloud) 60%, transparent 62%);
+  background-size: 1300px 100%;
+  animation-name: menu-drift-near;
+  animation-duration: 70s;
+  transform: translate(calc(var(--mx) * -20px), calc(var(--my) * -8px));
+}
+/* Each layer moves exactly one tile so the loop is seamless. */
+@keyframes menu-drift-far {
+  from { background-position-x: 0; }
+  to { background-position-x: -800px; }
+}
+@keyframes menu-drift-near {
+  from { background-position-x: 0; }
+  to { background-position-x: -1300px; }
+}
+.menu-island {
+  position: absolute;
+  left: -40px;
+  bottom: 14%;
+  width: calc(100% + 80px);
+  height: 18%;
+  fill: var(--land);
+  transform: translate(calc(var(--mx) * -14px), calc(var(--my) * -3px));
+}
+.menu-sea {
+  position: absolute;
+  inset: auto 0 0;
+  height: 14.5%;
+  background: linear-gradient(to bottom, var(--sea), color-mix(in srgb, var(--sea) 60%, #000));
+}
+.menu-flyby {
+  position: absolute;
+  top: 22%;
+  left: 0;
+  animation: menu-flyby 26s linear infinite;
+}
+.menu-flyby .aircraft-icon {
+  width: 110px;
+  height: 66px;
+  fill: rgba(255, 255, 255, 0.85);
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.25));
+  animation: menu-bob 4s ease-in-out infinite;
+}
+@keyframes menu-flyby {
+  from { transform: translateX(-160px); }
+  to { transform: translateX(calc(100vw + 160px)); }
+}
+@keyframes menu-bob {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+.menu-layout {
+  position: relative;
+  min-height: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+}
+.menu-hero { padding: 32px 32px 28px; }
+.main-menu .title { color: #fff; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35); margin-bottom: 0; }
+.main-menu .subtitle { margin: 0 0 22px; color: var(--text); opacity: 0.85; letter-spacing: 0.04em; }
+.menu-actions { display: flex; flex-direction: column; gap: 12px; }
+.menu-action { display: flex; flex-direction: column; gap: 4px; }
+.menu-btn {
+  font-size: 1.15rem;
+  padding: 14px 20px;
+  text-align: left;
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s, border-color 0.15s;
+}
+.menu-btn:hover,
+.menu-btn:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(31, 166, 239, 0.35);
+}
+.menu-btn:active { transform: translateY(0); box-shadow: none; }
+.menu-hint { font-size: 0.82rem; color: var(--text-dim); padding-left: 4px; }
+.menu-secondary { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.btn.ghost { background: transparent; font-size: 0.9rem; padding: 8px 14px; }
+.btn.ghost:hover { background: rgba(255, 255, 255, 0.1); }
+
+.menu-side { display: flex; flex-direction: column; gap: 16px; }
+.ready-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+.ready-card { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.ready-aircraft { display: flex; align-items: center; gap: 8px; }
+.ready-arrow {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+.ready-arrow:hover { background: rgba(255, 255, 255, 0.14); border-color: var(--accent); transform: scale(1.08); }
+.ready-arrow:focus-visible,
+.time-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ready-plane { flex: 1; min-width: 0; text-align: center; animation: ready-swap 0.3s ease-out; }
+.ready-plane .aircraft-icon { width: 150px; height: 90px; filter: drop-shadow(0 6px 14px rgba(79, 195, 255, 0.35)); }
+.ready-name { font-weight: 700; font-size: 1.1rem; }
+.ready-sub { font-size: 0.8rem; color: var(--text-dim); }
+@keyframes ready-swap {
+  from { opacity: 0; transform: translateX(16px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.ready-dots { display: flex; justify-content: center; gap: 6px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--panel-border); transition: background 0.2s, transform 0.2s; }
+.dot.on { background: var(--accent); transform: scale(1.4); }
+.ready-facts { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin: 0; }
+.ready-facts dt { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+.ready-facts dd { margin: 0; font-family: var(--font-mono); font-weight: 600; font-size: 0.9rem; }
+.ready-time { display: flex; gap: 4px; }
+.time-chip {
+  flex: 1;
+  cursor: pointer;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+.time-chip:hover { border-color: var(--accent); }
+.time-chip.active { background: var(--accent-strong); border-color: var(--accent); color: #04121d; font-weight: 700; }
+
+.pilot-log { padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
+.log-empty { margin: 0; font-size: 0.85rem; color: var(--text-dim); }
+.log-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 0.9rem; }
+.log-list li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--panel-border); }
+.log-list li:last-child { border-bottom: 0; }
+.log-score { font-family: var(--font-mono); font-weight: 700; color: var(--accent); }
+
+@media (max-width: 760px) {
+  .menu-layout { grid-template-columns: 1fr; align-items: start; }
+  .menu-hero { padding: 24px 20px; text-align: center; }
+  .menu-btn { text-align: center; }
+  .menu-hint { padding-left: 0; }
+  .menu-secondary { justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-clouds,
+  .menu-flyby,
+  .menu-flyby .aircraft-icon,
+  .ready-plane { animation: none; }
+  .menu-flyby { left: 12%; }
+  .menu-btn:hover,
+  .menu-btn:focus-visible { transform: none; }
+}
