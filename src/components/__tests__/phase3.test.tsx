@@ -29,13 +29,16 @@ describe('hangar', () => {
     expect(JSON.stringify(Object.values(localStorage))).toContain('a350')
   })
 
-  it('shows specs (collapsible) and sources', () => {
+  it('shows specs and sources for the selected aircraft only', () => {
     useGameStore.setState({ screen: 'modeSelect' })
     render(<GameUI />)
-    const card = screen.getByTestId('aircraft-card-f22')
-    expect(within(card).queryByText(/Sources:/)).toBeNull()
-    fireEvent.click(within(card).getByRole('button', { name: /Show specs/ }))
-    expect(within(card).getByText(/Sources:/)).toBeTruthy()
+    const detail = () => screen.getByTestId('aircraft-detail')
+    expect(detail().textContent).toContain('FS-1 Trainer')
+    expect(detail().textContent).not.toContain('F-22')
+    fireEvent.click(screen.getByRole('button', { name: 'Select F-22 Raptor' }))
+    expect(detail().textContent).toContain('F-22 Raptor')
+    expect(within(detail()).getByText(/Sources:/)).toBeTruthy()
+    expect(screen.getAllByText(/Sources:/)).toHaveLength(1)
   })
 })
 
