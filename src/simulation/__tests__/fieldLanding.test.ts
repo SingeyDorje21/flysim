@@ -46,8 +46,9 @@ describe('landing on sloping open ground', () => {
       expect(sim.state.crashReason).toBeNull()
     })
 
-    it(`${id}: flying into rising ground at the same vertical speed is still a crash`, () => {
-      const sim = approach(id, 270, -0.8)
+    it(`${id}: flying steeply into rising ground breaks the gear`, () => {
+      // 5 degrees down onto a 3 degree upslope: the wheels close on the grass at ~9 m/s.
+      const sim = approach(id, 270, -5)
       run(sim, 30, undefined, (s) => s.state.crashed)
       expect(sim.state.crashReason).toBe(CRASH_REASONS.hardLanding)
     })

@@ -17,11 +17,14 @@ export function ApproachIndicator({
   approach,
   units,
   assisting = false,
+  goingAround = false,
 }: {
   approach: NonNullable<NavInfo['approach']>
   units: Units
   /** The landing assist is flying: say so instead of offering it. */
   assisting?: boolean
+  /** ...and it is going around from an unstable approach. */
+  goingAround?: boolean
 }) {
   const lateral = clamp(approach.lateral, FULL_SCALE_LATERAL)
   const vertical = clamp(approach.vertical, FULL_SCALE_VERTICAL)
@@ -35,7 +38,7 @@ export function ApproachIndicator({
       </div>
       <div className={assisting ? 'approach-assist on' : 'approach-assist'} data-testid="approach-assist">
         {assisting ? (
-          'LANDING ASSIST · lining up'
+          `LANDING ASSIST · ${goingAround ? 'going around' : 'flying the approach'}`
         ) : (
           <>
             <kbd>0</kbd> Landing assist

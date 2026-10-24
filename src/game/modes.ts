@@ -45,7 +45,7 @@ export const GAME_MODES: readonly GameModeInfo[] = [
     description:
       'You are on a 3-degree final approach, 2 miles out. Land on the runway, ideally near the aiming point, and stop on the paved surface.',
     objectives: [
-      'Touch down on the runway - a sink rate over ~4.5 m/s (900 ft/min) is a crash',
+      'Touch down gently on the runway - a hard landing costs points, a very hard one breaks the gear',
       'Come to a complete stop on the runway',
       'Bonus: gentle touchdown near the aiming point, on the centreline',
     ],

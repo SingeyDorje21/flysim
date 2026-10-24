@@ -84,11 +84,17 @@ describe('jet landings: derotation and hard-landing check', () => {
     30000,
   )
 
-  it.each(['a220', 'a350', 'global8000'] as const)('%s: a 4.5 m/s main-gear touchdown on either main wheel is a hard landing', (id) => {
+  it.each(['a220', 'a350', 'global8000'] as const)('%s: a 7 m/s main-gear touchdown on either main wheel breaks the gear', (id) => {
     for (const bank of [-4, 0, 4]) {
-      const sim = mainGearSlam(id, 4.5, bank)
+      const sim = mainGearSlam(id, 7, bank)
       expect(sim.state.crashReason, `bank ${bank}`).toBe(CRASH_REASONS.hardLanding)
     }
+  })
+
+  it('a hard 4.5 m/s A220 touchdown is survivable', () => {
+    const sim = mainGearSlam('a220', 4.5, 0)
+    expect(sim.state.crashReason).toBeNull()
+    expect(sim.state.onGround).toBe(true)
   })
 
   it('a firm but normal 2.5 m/s A220 touchdown is not a hard landing', () => {

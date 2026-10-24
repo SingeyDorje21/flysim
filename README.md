@@ -7,7 +7,7 @@ A browser flight simulator built with React, Three.js (react-three-fiber) and Ty
 - Flight physics with take-off, landing, and landing on open ground
 - Airports with more than one runway, plus a minimap and world map
 - Autopilot with speed, heading, altitude and vertical-speed holds
-- Landing assist (press `0` near a runway): lines you up on the runway and the glide path
+- Landing assist (press `0` near a runway): flies the approach down to 100 ft, then hands over for the flare; goes around if the approach is unstable
 - Flight School lessons, including a full circuit: take off, fly around and land
 
 ## Getting started
