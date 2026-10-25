@@ -1,3 +1,4 @@
+import { Analytics } from '@vercel/analytics/react'
 import { useAudioUnlock } from './audio/context'
 import { GameUI } from './components/GameUI'
 import { useHotkeys } from './input/hotkeys'
@@ -19,6 +20,7 @@ export default function App() {
         </CanvasErrorBoundary>
       )}
       <GameUI />
+      <Analytics />
     </>
   )
 }
