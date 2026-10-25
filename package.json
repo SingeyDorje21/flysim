@@ -2,6 +2,15 @@
   "name": "flysim",
   "private": true,
   "version": "0.1.0",
+  "description": "Open-source island flight simulator that runs in the browser",
+  "license": "MIT",
+  "author": "Singey Dorje",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SingeyDorje21/flysim.git"
+  },
+  "homepage": "https://github.com/SingeyDorje21/flysim#readme",
+  "bugs": "https://github.com/SingeyDorje21/flysim/issues",
   "type": "module",
   "scripts": {
     "dev": "vite",
