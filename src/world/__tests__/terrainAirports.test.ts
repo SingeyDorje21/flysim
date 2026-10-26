@@ -70,17 +70,21 @@ describe('airport terrain', () => {
       })
 
       it('is exactly at its elevation over every flat zone (plus margin)', () => {
+        // Collect the misses and assert once: an expect per sample made this slow enough to time out.
+        const misses: string[] = []
         for (const fz of layout.flatZones) {
           forEachInOriented(
             fz,
             7,
             (x, z) => {
-              expect(terrain.heightAt(x, z)).toBe(a.elevation)
-              expect(terrain.surfaceAt(x, z)).not.toBe('water')
+              const h = terrain.heightAt(x, z)
+              if (h !== a.elevation) misses.push(`height ${h} at (${x}, ${z})`)
+              if (terrain.surfaceAt(x, z) === 'water') misses.push(`water at (${x}, ${z})`)
             },
             FLAT_MARGIN,
           )
         }
+        expect(misses.slice(0, 5)).toEqual([])
       })
 
       it('sits on land, at an elevation close to the natural ground', () => {
