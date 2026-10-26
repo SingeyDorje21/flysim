@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
-import { useState } from 'react'
-import { CalloutDetector, speak } from '../audio/callouts'
+import { useEffect, useState } from 'react'
+import { CalloutDetector, speak, stopSpeech } from '../audio/callouts'
 import type { FlightAudio } from '../audio/FlightAudio'
 import { getAircraft } from '../config/aircraftCatalog'
 import { useGameStore } from '../state/gameStore'
@@ -16,6 +16,7 @@ export function SimulationDriver({ session, audio }: { session: FlightSession; a
   const info = getAircraft(session.aircraftId)
   const engineKind = info.engineKind
   const [callouts] = useState(() => new CalloutDetector())
+  useEffect(() => stopSpeech, [])
   useFrame((_, delta) => {
     const { paused, screen, overlay, settings } = useGameStore.getState()
     const frozen = paused || overlay !== 'none' || screen !== 'flight'
@@ -47,7 +48,11 @@ export function SimulationDriver({ session, audio }: { session: FlightSession; a
       delta,
     )
 
-    if (frozen || s.crashed) return
+    if (frozen || s.crashed) {
+      // A callout already being read out stops with the flight.
+      stopSpeech()
+      return
+    }
     const calls = callouts.detect(
       {
         airspeed: s.airspeed,
