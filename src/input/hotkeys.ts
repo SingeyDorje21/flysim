@@ -27,7 +27,7 @@ export function handleHotkey(code: string): boolean {
   if (code === 'Escape' || code === 'KeyP') {
     if (s.overlay !== 'none') s.closeOverlay()
     else if (s.screen === 'flight') s.togglePause()
-    else if (s.screen === 'modeSelect' && code === 'Escape') s.goToMainMenu()
+    else if ((s.screen === 'modeSelect' || s.screen === 'flightSchool') && code === 'Escape') s.goToMainMenu()
     else return false
     return true
   }

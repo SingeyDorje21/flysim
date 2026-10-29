@@ -76,7 +76,9 @@ describe('terrain sampler', () => {
     }
   })
 
-  it('meets the speed budget: 200k physics-pattern calls in < 400 ms (worst-case raster < 800 ms)', () => {
+  // Wall-clock budget: retried, so a moment of CPU contention from the parallel test
+  // workers is not reported as a slowdown (a real regression fails every attempt).
+  it('meets the speed budget: 200k physics-pattern calls in < 400 ms (worst-case raster < 800 ms)', { retry: 2 }, () => {
     const s = createTerrainSampler()
     let acc = 0
     for (let i = 0; i < 20000; i++) acc += s.heightAt(9000 + (i % 200) * 30, -20000 + i * 0.1)

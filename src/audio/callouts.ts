@@ -103,3 +103,13 @@ export function speak(text: string, volume: number): void {
     // Speech unavailable.
   }
 }
+
+/** Silence any callout being spoken or queued (pause, results, quitting the flight). */
+export function stopSpeech(): void {
+  try {
+    const synth = globalThis.speechSynthesis
+    if (synth && (synth.speaking || synth.pending)) synth.cancel()
+  } catch {
+    // Speech unavailable.
+  }
+}
