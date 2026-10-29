@@ -1,3 +1,4 @@
+import { Analytics } from '@vercel/analytics/react'
 import { lazy, Suspense } from 'react'
 import { useAudioUnlock } from './audio/context'
 import { GameUI } from './components/GameUI'
@@ -27,6 +28,7 @@ export default function App() {
         </CanvasErrorBoundary>
       )}
       <GameUI />
+      <Analytics />
     </>
   )
 }
