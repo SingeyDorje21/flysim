@@ -22,4 +22,4 @@ services:
         value: "1"
       # Only the FlySim site and its Vercel previews may connect.
       - key: ALLOWED_ORIGINS
-        value: https://flysim.vercel.app,https://flysim-singeys-projects.vercel.app,https://flysim-*-singeys-projects.vercel.app
+        value: https://flysim-seven.vercel.app,https://flysim-singeys-projects.vercel.app,https://flysim-*-singeys-projects.vercel.app
