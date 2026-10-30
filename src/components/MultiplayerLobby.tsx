@@ -1,9 +1,12 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { AIRCRAFT_IDS, getAircraft, type AircraftId } from '../config/aircraftCatalog'
 import { isValidRoomCode, normalizeRoomCode } from '../net/protocol'
 import { useGameStore } from '../state/gameStore'
 import { enterMultiplayerFlight, useMultiplayerStore } from '../state/multiplayerStore'
 import './Multiplayer.css'
+
+/** After this long still connecting, explain that the server may be waking up. */
+const WAKE_HINT_MS = 4000
 
 /** Copy the room code; shows whether it worked. */
 export function CopyCode({ code }: { code: string }) {
@@ -78,6 +81,16 @@ export function MultiplayerLobby() {
 
   const busy = status === 'connecting'
   const inRoom = status === 'inRoom' || status === 'reconnecting'
+  // A free-tier server sleeps when idle and takes a while to wake: say so instead of looking stuck.
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (!busy) return
+    const t = setTimeout(() => setSlow(true), WAKE_HINT_MS)
+    return () => {
+      clearTimeout(t)
+      setSlow(false)
+    }
+  }, [busy])
   const codeOk = isValidRoomCode(normalizeRoomCode(code))
 
   const onJoin = (e: FormEvent) => {
@@ -132,12 +145,18 @@ export function MultiplayerLobby() {
             </label>
 
             <div className="mp-actions">
-              <button type="button" className="btn primary" disabled={busy} onClick={() => createRoom(aircraftId)}>
-                Create room
-              </button>
-              <form className="mp-join" onSubmit={onJoin} noValidate>
+              <section className="mp-section" aria-label="Create a room">
+                <button type="button" className="btn primary" disabled={busy} onClick={() => createRoom(aircraftId)}>
+                  Create room
+                </button>
+                <p className="mp-note">A room code is made for you to share. No code needed.</p>
+              </section>
+              <div className="mp-or" aria-hidden="true">
+                <span>or join a friend</span>
+              </div>
+              <form className="mp-join" onSubmit={onJoin} noValidate aria-label="Join a friend's room">
                 <label className="field" htmlFor={`${uid}-code`}>
-                  <span className="field-label">Room code</span>
+                  <span className="field-label">Friend's room code</span>
                   <input
                     id={`${uid}-code`}
                     className="mp-input mp-code-input"
@@ -145,7 +164,7 @@ export function MultiplayerLobby() {
                     maxLength={9}
                     autoComplete="off"
                     spellCheck={false}
-                    placeholder="ABC234"
+                    placeholder="Code they shared"
                     disabled={busy}
                     aria-invalid={codeTouched && !codeOk}
                     aria-describedby={`${uid}-code-hint`}
@@ -168,7 +187,13 @@ export function MultiplayerLobby() {
         )}
 
         <p className="mp-status" role="status">
-          {busy ? 'Connecting...' : status === 'reconnecting' ? 'Reconnecting...' : ''}
+          {busy
+            ? slow
+              ? 'Waking up the multiplayer server... this can take up to a minute.'
+              : 'Connecting...'
+            : status === 'reconnecting'
+              ? 'Reconnecting...'
+              : ''}
         </p>
         {errorMessage && (
           <p className="mp-error" role="alert">

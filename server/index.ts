@@ -3,10 +3,14 @@
  *
  * Env:
  *   PORT             listen port (default 8787)
- *   ALLOWED_ORIGINS  comma-separated page origins allowed to connect; unset = any (set it in production)
+ *   ALLOWED_ORIGINS  comma-separated page origins allowed to connect; `*` matches any run of
+ *                    host characters, e.g. https://flysim-*.vercel.app. Unset = any (set it in production)
  *   TRUST_PROXY      "1" to take the client IP from X-Forwarded-For (only behind a proxy that appends it)
+ *
+ * GET /healthz answers 200 for host health checks; everything else is the WebSocket.
  */
 
+import { createServer, type Server } from 'node:http'
 import { isIP } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { MAX_MESSAGE_BYTES, SERVER_TICK_HZ } from '../src/net/protocol'
@@ -41,13 +45,42 @@ export function clientKey(remoteAddress: string | undefined, forwardedFor: strin
   return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':')}::/64`
 }
 
-export function startServer(port = PORT): { wss: WebSocketServer; rooms: RoomServer; stop: () => Promise<void> } {
-  const rooms = new RoomServer()
-  const wss = new WebSocketServer({
-    port,
-    maxPayload: MAX_MESSAGE_BYTES,
-    verifyClient: ({ origin }: { origin: string }) => ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin),
+/**
+ * Whether a page origin may connect. Patterns are exact origins, or contain `*`
+ * standing for one or more host-name characters (letters, digits, hyphens, dots),
+ * so `https://flysim-*.vercel.app` covers every Vercel preview but not other sites.
+ */
+export function originAllowed(origin: string | undefined, patterns: readonly string[]): boolean {
+  if (patterns.length === 0) return true
+  if (!origin) return false
+  return patterns.some((p) => {
+    if (!p.includes('*')) return p === origin
+    const re = p
+      .split('*')
+      .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('[a-z0-9.-]+')
+    return new RegExp(`^${re}$`, 'i').test(origin)
   })
+}
+
+export function startServer(port = PORT): {
+  http: Server
+  wss: WebSocketServer
+  rooms: RoomServer
+  stop: () => Promise<void>
+} {
+  const rooms = new RoomServer()
+  const http = createServer((req, res) => {
+    const ok = req.method === 'GET' && (req.url === '/healthz' || req.url === '/')
+    res.writeHead(ok ? 200 : 404, { 'content-type': 'text/plain' })
+    res.end(ok ? 'ok' : 'not found')
+  })
+  const wss = new WebSocketServer({
+    server: http,
+    maxPayload: MAX_MESSAGE_BYTES,
+    verifyClient: ({ origin }: { origin: string }) => originAllowed(origin, ALLOWED_ORIGINS),
+  })
+  http.listen(port)
   const alive = new WeakMap<WebSocket, boolean>()
   const perIp = new Map<string, number>()
 
@@ -109,9 +142,9 @@ export function startServer(port = PORT): { wss: WebSocketServer; rooms: RoomSer
       clearInterval(tick)
       clearInterval(heartbeat)
       for (const ws of wss.clients) ws.terminate()
-      wss.close(() => resolve())
+      wss.close(() => http.close(() => resolve()))
     })
-  return { wss, rooms, stop }
+  return { http, wss, rooms, stop }
 }
 
 // Run when executed directly (not when imported by tests).
@@ -119,6 +152,6 @@ if (process.argv[1] && /server[\\/]index\.ts$/.test(process.argv[1])) {
   if (ALLOWED_ORIGINS.length === 0 && process.env.NODE_ENV === 'production') {
     console.warn('ALLOWED_ORIGINS is not set: any website can connect to this server.')
   }
-  const { wss } = startServer()
-  wss.on('listening', () => console.log(`FlySim room server listening on ws://localhost:${PORT}`))
+  const { http } = startServer()
+  http.on('listening', () => console.log(`FlySim room server listening on ws://localhost:${PORT}`))
 }

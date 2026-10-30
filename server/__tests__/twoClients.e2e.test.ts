@@ -14,8 +14,16 @@ let url = ''
 
 beforeAll(async () => {
   server = startServer(0)
-  await new Promise<void>((resolve) => server.wss.once('listening', () => resolve()))
-  url = `ws://127.0.0.1:${(server.wss.address() as AddressInfo).port}`
+  await new Promise<void>((resolve) => server.http.once('listening', () => resolve()))
+  url = `ws://127.0.0.1:${(server.http.address() as AddressInfo).port}`
+})
+
+describe('health check', () => {
+  it('answers GET /healthz with 200 on the same port', async () => {
+    const res = await fetch(url.replace('ws:', 'http:') + '/healthz')
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('ok')
+  })
 })
 afterAll(() => server.stop())
 

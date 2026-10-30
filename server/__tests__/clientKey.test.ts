@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { clientKey } from '../index'
+import { clientKey, originAllowed } from '../index'
+
+describe('originAllowed', () => {
+  const patterns = ['https://flysim.vercel.app', 'https://flysim-*.vercel.app']
+
+  it('allows anything when no origins are configured', () => {
+    expect(originAllowed('https://evil.example', [])).toBe(true)
+  })
+
+  it('allows the exact production origin and any preview origin', () => {
+    expect(originAllowed('https://flysim.vercel.app', patterns)).toBe(true)
+    expect(originAllowed('https://flysim-git-feature-circuit-lesson-singey.vercel.app', patterns)).toBe(true)
+  })
+
+  it('refuses other sites, including look-alikes', () => {
+    expect(originAllowed('https://evil.example', patterns)).toBe(false)
+    expect(originAllowed('https://flysim-x.vercel.app.evil.example', patterns)).toBe(false)
+    expect(originAllowed('https://flysim-x/evil.vercel.app', patterns)).toBe(false)
+    expect(originAllowed(undefined, patterns)).toBe(false)
+  })
+})
 
 describe('clientKey', () => {
   it('uses the socket address when no proxy is trusted', () => {

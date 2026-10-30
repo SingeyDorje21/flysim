@@ -94,13 +94,18 @@ On `localhost` the game finds the server at `ws://localhost:8787` by itself. To 
 
 **Deploy**
 
-The site stays a static build (Vercel or any static host). The room server needs an always-on host that supports WebSockets, such as Fly.io, Render or Railway. Run `npm run server` there.
+The site stays a static build on Vercel. Vercel can't host the always-on WebSocket room server, so that runs on [Render](https://render.com), whose free plan works without a card. [`render.yaml`](render.yaml) sets it all up.
+
+1. In Render: **New → Blueprint**, then pick this repository and branch. Render creates the `flysim-rooms` service and runs `npm run server`. Health checks hit `/healthz`.
+2. That's it. The game connects to `wss://flysim-rooms.onrender.com` by default. If Render gives the service a different URL, set `VITE_MP_SERVER_URL` to it in Vercel and redeploy.
+
+On the free plan the server sleeps after about 15 minutes idle. The first room after that takes up to a minute to connect, and the lobby says so while it waits.
 
 | Setting                    | Where       | Meaning                                                                        |
 | -------------------------- | ----------- | ------------------------------------------------------------------------------ |
-| `VITE_MP_SERVER_URL`       | site build  | Room server URL, e.g. `wss://flysim-rooms.fly.dev`. Without it, multiplayer only works on localhost. |
+| `VITE_MP_SERVER_URL`       | site build  | Room server URL. Default: `wss://flysim-rooms.onrender.com`, or `ws://localhost:8787` when the game runs on localhost |
 | `PORT`                     | server      | Listen port (default `8787`)                                                   |
-| `ALLOWED_ORIGINS`          | server      | Comma-separated site origins allowed to connect (recommended in production)    |
+| `ALLOWED_ORIGINS`          | server      | Comma-separated site origins allowed to connect. `*` matches part of a host name, e.g. `https://flysim-*-singeys-projects.vercel.app` for every preview |
 | `TRUST_PROXY`              | server      | `1` behind a proxy, so per-IP rate limits use `X-Forwarded-For`               |
 
 **Decisions you might revisit:** these are in [docs/plan/multiplayer.md](docs/plan/multiplayer.md) and [docs/adr/0001-multiplayer-room-server.md](docs/adr/0001-multiplayer-room-server.md).
