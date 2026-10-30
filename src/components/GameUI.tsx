@@ -13,6 +13,9 @@ import { HowItWorks } from './HowItWorks'
 import { Hud } from './Hud'
 import { InstrumentPanel } from './Instruments'
 import { MainMenu } from './MainMenu'
+import { MultiplayerHud } from './MultiplayerHud'
+import { MultiplayerLobby } from './MultiplayerLobby'
+import { useMultiplayerStore } from '../state/multiplayerStore'
 import { WorldMap } from './WorldMap'
 import './GameUI.css'
 
@@ -420,16 +423,21 @@ export function GameUI() {
   const paused = useGameStore((s) => s.paused)
   const showHud = useGameStore((s) => s.settings.showHud)
   const showInstruments = useGameStore((s) => s.settings.showInstruments)
+  const inRoom = useMultiplayerStore(
+    (s) => s.status === 'inRoom' || s.status === 'reconnecting' || s.connectionLost,
+  )
 
   return (
     <div className="game-ui">
       {screen === 'mainMenu' && <MainMenu />}
       {screen === 'modeSelect' && <ModeSelect />}
       {screen === 'flightSchool' && <FlightSchool />}
+      {screen === 'multiplayer' && <MultiplayerLobby />}
       {screen === 'flight' && (
         <>
           {showHud && <Hud />}
           {showInstruments && <InstrumentPanel />}
+          {inRoom && <MultiplayerHud />}
           {paused && <PauseMenu />}
         </>
       )}

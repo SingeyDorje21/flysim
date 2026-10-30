@@ -8,6 +8,7 @@ import { ApproachIndicator } from './Approach'
 import { CoachPanel } from './Coach'
 import { formatAltitude, formatDistance, formatSpeed, formatTime, formatVerticalSpeed } from './format'
 import { Minimap } from './Minimap'
+import { Leaderboard } from './MultiplayerHud'
 import { LandingCoach } from './LandingCoach'
 import './Hud.css'
 
@@ -249,6 +250,9 @@ export function Hud() {
           <span>{t.gForce.toFixed(1)}</span>
         </div>
       </div>
+
+      {/* Multiplayer only (renders nothing outside a room): below the airspeed box. */}
+      <Leaderboard />
 
       <LandingCoach />
 

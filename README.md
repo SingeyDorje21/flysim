@@ -27,6 +27,7 @@ Take off, fly a circuit and grease the landing, from a light trainer to an A350.
 - **Flight School:** guided take-off, landing and full-circuit lessons
 - **Challenges:** take-off, landing and ring courses, with best scores kept in your pilot log
 - **Time of day:** morning, noon or evening light
+- **Multiplayer:** share a room code and fly the island together, with mid-air collisions and an airborne-time leaderboard
 
 ## Quick start
 
@@ -59,15 +60,60 @@ Then open the local URL Vite prints (usually http://localhost:5173).
 | Camera: chase / cockpit / free | `1` / `2` / `3` (`C` cycles)             |
 | Toggle HUD / instruments       | `H` / `I`                                |
 | World map                      | `M`                                      |
+| Multiplayer leaderboard        | `L` (in a room)                          |
 | Pause                          | `Esc` or `P`                             |
 
 The full list is also on the **Controls** screen in the game.
+
+## Multiplayer
+
+Single player is unchanged and needs no server. Multiplayer adds a small room server ([server/](server/)) that the browser connects to over WebSockets.
+
+**How it plays**
+
+- **Rooms and codes:** choose **Multiplayer** on the main menu, enter a pilot name and pick an aircraft.
+  - **Create room** gives you a 6-character code (like `ABC234`) to share, then **Take off**.
+  - Others enter the code and **Join**, which puts them straight onto the runway.
+  - A room holds up to 8 pilots. Everyone starts on the home runway, each in their own slot.
+- **Collisions:** if two aircraft touch, both crash. The server decides, using a sphere around each aircraft scaled to its size. You get 3 seconds of immunity after joining or respawning, and two aircraft that are both on the ground never collide. After a crash, **Respawn** puts you back in your slot.
+- **Leaderboard:** ranks pilots by time spent in the air. It only counts while you're airborne, not crashed, and not paused. A mid-air collision resets **both** pilots to 0:00. Hitting the terrain only pauses your clock until you respawn. Press `L` to hide or show it.
+
+**Run it locally**
+
+Start the room server in one terminal and the game in another:
+
+```bash
+npm run server
+```
+
+```bash
+npm run dev
+```
+
+On `localhost` the game finds the server at `ws://localhost:8787` by itself. To try two pilots, open the game in two browser windows: create a room in one and join it from the other.
+
+**Deploy**
+
+The site stays a static build (Vercel or any static host). The room server needs an always-on host that supports WebSockets, such as Fly.io, Render or Railway. Run `npm run server` there.
+
+| Setting                    | Where       | Meaning                                                                        |
+| -------------------------- | ----------- | ------------------------------------------------------------------------------ |
+| `VITE_MP_SERVER_URL`       | site build  | Room server URL, e.g. `wss://flysim-rooms.fly.dev`. Without it, multiplayer only works on localhost. |
+| `PORT`                     | server      | Listen port (default `8787`)                                                   |
+| `ALLOWED_ORIGINS`          | server      | Comma-separated site origins allowed to connect (recommended in production)    |
+| `TRUST_PROXY`              | server      | `1` behind a proxy, so per-IP rate limits use `X-Forwarded-For`               |
+
+**Decisions you might revisit:** these are in [docs/plan/multiplayer.md](docs/plan/multiplayer.md) and [docs/adr/0001-multiplayer-room-server.md](docs/adr/0001-multiplayer-room-server.md).
+- Only mid-air collisions reset a score (D2).
+- Leaderboards last as long as the room and aren't saved anywhere (D3).
+- Rooms are capped at 8 pilots (D4).
 
 ## Scripts
 
 | Command             | What it does                        |
 | ------------------- | ----------------------------------- |
 | `npm run dev`       | Start the dev server                |
+| `npm run server`    | Start the multiplayer room server   |
 | `npm run build`     | Type-check and build for production |
 | `npm run preview`   | Serve the production build          |
 | `npm test`          | Run the tests (Vitest)              |
@@ -87,7 +133,9 @@ src/
 ├── input/        Keyboard controls and hotkeys
 ├── audio/        Engine sound and callouts
 ├── session/      Flight session lifecycle
+├── net/          Multiplayer protocol, client and remote-pose smoothing
 └── state/        Zustand stores
+server/           Multiplayer room server (Node + ws)
 ```
 
 ## Contributing

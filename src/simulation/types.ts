@@ -199,6 +199,8 @@ export interface FlightModel {
   step(): void
   /** Restore a fresh state at the spawn; clears all transient state. */
   reset(spawn: SpawnState): void
+  /** Crash now with `reason` (multiplayer collisions). No-op once crashed. */
+  forceCrash(reason: string): void
 }
 
 /**
