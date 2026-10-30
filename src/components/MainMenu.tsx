@@ -131,6 +131,7 @@ function PilotLog() {
 export function MainMenu() {
   const goToModeSelect = useGameStore((s) => s.goToModeSelect)
   const goToFlightSchool = useGameStore((s) => s.goToFlightSchool)
+  const goToMultiplayer = useGameStore((s) => s.goToMultiplayer)
   const startFlight = useGameStore((s) => s.startFlight)
   const openOverlay = useGameStore((s) => s.openOverlay)
   const timeOfDay = useGameStore((s) => s.settings.timeOfDay)
@@ -140,6 +141,7 @@ export function MainMenu() {
     { label: 'Fly', hint: 'Pick an aircraft, airport and challenge', run: goToModeSelect },
     { label: 'Flight School', hint: 'Guided lessons: take-off, landing, circuit', run: goToFlightSchool },
     { label: 'Quick Flight', hint: 'Straight onto the runway in your current aircraft', run: () => startFlight('freeFlight') },
+    { label: 'Multiplayer', hint: 'Create a room or join one with a code', run: goToMultiplayer },
   ]
   const secondary: Action[] = [
     { label: 'How It Works', run: () => openOverlay('howItWorks') },

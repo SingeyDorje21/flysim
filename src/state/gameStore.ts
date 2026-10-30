@@ -14,7 +14,7 @@ import { GAME_MODES } from '../game/modes'
 import { CAMERA_MODES, type CameraMode, type FlightResult, type GameMode } from '../game/types'
 import { TIMES_OF_DAY, type TimeOfDay } from '../world/types'
 
-export type Screen = 'mainMenu' | 'modeSelect' | 'flightSchool' | 'flight' | 'results'
+export type Screen = 'mainMenu' | 'modeSelect' | 'flightSchool' | 'multiplayer' | 'flight' | 'results'
 /** Modal panels that can sit on top of any screen. */
 export type Overlay = 'none' | 'settings' | 'controls' | 'howItWorks' | 'map'
 /** imperial = knots, feet, ft/min. metric = km/h, metres, m/s. */
@@ -84,6 +84,7 @@ export interface GameState {
   goToMainMenu(): void
   goToModeSelect(): void
   goToFlightSchool(): void
+  goToMultiplayer(): void
   openOverlay(overlay: Exclude<Overlay, 'none'>): void
   closeOverlay(): void
   startFlight(mode: GameMode): void
@@ -208,6 +209,8 @@ export const useGameStore = create<GameState>()(
         set({ screen: 'modeSelect', overlay: 'none', paused: false, result: null, newBest: false }),
       goToFlightSchool: () =>
         set({ screen: 'flightSchool', overlay: 'none', paused: false, result: null, newBest: false }),
+      goToMultiplayer: () =>
+        set({ screen: 'multiplayer', overlay: 'none', paused: false, result: null, newBest: false }),
       openOverlay: (overlay) => set({ overlay }),
       closeOverlay: () => set({ overlay: 'none' }),
 

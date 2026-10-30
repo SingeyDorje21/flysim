@@ -22,7 +22,8 @@ import { KeyboardControls } from '../input/keyboard'
 import { AircraftPhysics } from '../simulation/AircraftPhysics'
 import { FixedTimestep } from '../simulation/FixedTimestep'
 import { interpolatePose } from '../simulation/interpolate'
-import type { AircraftRenderState, ControlInputs, FlightModel, TerrainSampler } from '../simulation/types'
+import type { AircraftRenderState, ControlInputs, FlightModel, SpawnState, TerrainSampler } from '../simulation/types'
+import { spawnSlotOffset } from '../net/protocol'
 import { clearDialed, resetAutopilot, useAutopilotStore } from '../state/autopilotStore'
 import { publishTelemetry, resetTelemetry, type NavInfo } from '../state/telemetry'
 import { getTerrainSampler } from '../world/terrain/terrainSampler'
@@ -46,6 +47,8 @@ export interface FlightSessionOptions {
   place?: FlightPlace
   /** Aircraft type for this session (fixed for its lifetime). Default 'trainer'. */
   aircraft?: AircraftId
+  /** Multiplayer spawn slot: the start moves along/beside the runway so players don't overlap. */
+  spawnSlot?: number | null
   onFinish(result: FlightResult): void
 }
 
@@ -68,6 +71,7 @@ export class FlightSession {
   private readonly timestep: FixedTimestep
   private readonly onFinish: (result: FlightResult) => void
   readonly aircraftId: AircraftId
+  private spawnSlot: number | null
   /**
    * The F-22 manoeuvres routinely past the angle where its stall flags trip,
    * so it gets no stall warning or horn (its flight controls protect it).
@@ -105,6 +109,7 @@ export class FlightSession {
     this.mode = options.mode
     this.place = options.place ?? HOME_PLACE
     this.aircraftId = options.aircraft ?? 'trainer'
+    this.spawnSlot = options.spawnSlot ?? null
     this.stallAlerts = this.aircraftId !== 'f22'
     this.technique = techniqueFor(this.aircraftId)
     // A direct-law stick moves the elevator, a fly-by-wire stick asks for load factor (about
@@ -115,7 +120,7 @@ export class FlightSession {
     this.landingAssist = new LandingAssist(this.aircraftId)
     this.physics = new AircraftPhysics({
       terrain: this.terrain,
-      spawn: spawnFor(this.mode, this.place, this.aircraftId),
+      spawn: this.spawnAt(this.mode, this.place),
       aircraft: this.aircraftId,
     })
     this.timestep = new FixedTimestep({ dt: this.physics.fixedDt })
@@ -146,6 +151,29 @@ export class FlightSession {
     return this.mode
   }
 
+  /** Multiplayer spawn slot for the next reset(), or null for the normal spawn. */
+  setSpawnSlot(slot: number | null): void {
+    this.spawnSlot = slot
+  }
+
+  /** The spawn for `mode` at `place`, moved to this session's multiplayer slot (if any). */
+  private spawnAt(mode: GameMode, place: FlightPlace): SpawnState {
+    const spawn = spawnFor(mode, place, this.aircraftId)
+    if (this.spawnSlot === null) return spawn
+    const { alongM, rightM } = spawnSlotOffset(this.spawnSlot)
+    const h = (spawn.headingDeg * Math.PI) / 180
+    // Heading 0 = north (-Z): forward = (sin h, -cos h), right = (cos h, sin h) in x/z.
+    const p = spawn.position
+    return {
+      ...spawn,
+      position: {
+        x: p.x + Math.sin(h) * alongM + Math.cos(h) * rightM,
+        y: p.y,
+        z: p.z - Math.cos(h) * alongM + Math.sin(h) * rightM,
+      },
+    }
+  }
+
   /** Collide with the mesh that is actually drawn (call when the quality changes). */
   setTerrain(terrain: TerrainSampler): void {
     this.terrainTarget = terrain
@@ -155,7 +183,7 @@ export class FlightSession {
   reset(mode: GameMode = this.mode, place: FlightPlace = this.place): void {
     this.mode = mode
     this.place = place
-    this.physics.reset(spawnFor(mode, place, this.aircraftId))
+    this.physics.reset(this.spawnAt(mode, place))
     this.timestep.reset()
     this.challenge = createChallenge(mode, this.ringView, place, this.aircraftId)
     this.syncKeyboard()

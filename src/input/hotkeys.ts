@@ -6,6 +6,7 @@
 import { useEffect } from 'react'
 import { useAutopilotStore } from '../state/autopilotStore'
 import { useGameStore } from '../state/gameStore'
+import { inMultiplayerRoom, useMultiplayerStore } from '../state/multiplayerStore'
 import type { CameraMode } from '../game/types'
 
 const CAMERA_KEYS: Record<string, CameraMode> = { Digit1: 'chase', Digit2: 'cockpit', Digit3: 'free' }
@@ -27,7 +28,11 @@ export function handleHotkey(code: string): boolean {
   if (code === 'Escape' || code === 'KeyP') {
     if (s.overlay !== 'none') s.closeOverlay()
     else if (s.screen === 'flight') s.togglePause()
-    else if ((s.screen === 'modeSelect' || s.screen === 'flightSchool') && code === 'Escape') s.goToMainMenu()
+    else if (
+      (s.screen === 'modeSelect' || s.screen === 'flightSchool' || s.screen === 'multiplayer') &&
+      code === 'Escape'
+    )
+      s.goToMainMenu()
     else return false
     return true
   }
@@ -39,6 +44,7 @@ export function handleHotkey(code: string): boolean {
   else if (code === 'KeyI') s.toggleInstruments()
   else if (code === 'KeyM') s.openOverlay('map')
   else if (code === 'Digit0' || code === 'Numpad0') useAutopilotStore.getState().requestAssist()
+  else if (code === 'KeyL' && inMultiplayerRoom()) useMultiplayerStore.getState().toggleBoard()
   else return false
   return true
 }

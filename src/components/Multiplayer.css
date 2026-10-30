@@ -1,0 +1,90 @@
+/* Multiplayer lobby, in-flight room panel and leaderboard. */
+
+.mp-lobby { max-width: 440px; text-align: left; }
+.mp-lobby h2 { text-align: center; }
+.mp-intro { color: var(--text-dim); font-size: 0.9rem; margin: 0 0 8px; }
+
+.mp-input {
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.mp-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mp-input[aria-invalid='true'] { border-color: var(--danger); }
+.mp-input option { color: #000; }
+.mp-code-input { font-family: var(--font-mono); letter-spacing: 0.2em; text-transform: uppercase; }
+
+.mp-actions { display: grid; gap: 12px; margin-top: 8px; }
+.mp-join { display: grid; grid-template-columns: 1fr auto; align-items: end; column-gap: 8px; }
+.mp-join .field { margin: 0; }
+.mp-join .mp-hint { grid-column: 1 / -1; grid-row: 2; }
+.mp-hint { min-height: 1.1em; font-size: 0.8rem; color: var(--danger); }
+
+.mp-status { min-height: 1.2em; margin: 8px 0 0; color: var(--text-dim); text-align: center; }
+.mp-error { margin: 4px 0 8px; color: var(--danger); text-align: center; }
+.mp-lobby > .btn.ghost { display: block; margin: 8px auto 0; }
+
+.mp-ready { display: grid; gap: 10px; }
+.mp-code-row { display: flex; align-items: center; gap: 10px; }
+.mp-code { font-family: var(--font-mono); font-size: 2rem; letter-spacing: 0.25em; color: var(--accent); }
+.mp-roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.mp-roster li { display: flex; gap: 6px; padding: 4px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.mp-roster-aircraft { margin-left: auto; color: var(--text-dim); font-size: 0.85rem; }
+.mp-you { color: var(--text-dim); }
+
+/*
+ * In-flight room panel: code + leaderboard, left side between the airspeed box
+ * (top 140px, ~107px tall) and the key list (156px tall, 12px or 190px from the
+ * bottom with the instrument panel). It scrolls rather than run into the key list.
+ */
+.mp-panel {
+  position: absolute;
+  left: 12px;
+  top: 259px;
+  width: 220px;
+  max-height: calc(100% - 259px - 188px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  pointer-events: auto;
+}
+.with-instruments .mp-panel { max-height: calc(100% - 259px - 366px); min-height: 0; }
+/* The landing coach uses the same slot; the leaderboard steps aside like the key list. */
+.hud:has(.landing-coach) .mp-panel { display: none; }
+.mp-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+.mp-panel-code { font-family: var(--font-mono); letter-spacing: 0.15em; color: var(--accent); }
+.mp-panel .mp-copy { padding: 2px 8px; font-size: 0.75rem; }
+.mp-board { list-style: none; margin: 0; padding: 0; counter-reset: rank; }
+.mp-board li {
+  display: grid;
+  grid-template-columns: 1.4em 1fr auto;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  counter-increment: rank;
+}
+.mp-board li::before { content: counter(rank); color: var(--text-dim); }
+.mp-board li.me { background: rgba(80, 180, 255, 0.18); font-weight: 700; }
+.mp-board li.reset { animation: mp-reset 1.6s ease-out; }
+.mp-board .mp-time { font-family: var(--font-mono); }
+.mp-board .mp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-panel-note { margin: 6px 0 0; color: var(--text-dim); font-size: 0.75rem; }
+.mp-panel-warn { margin: 6px 0 0; color: var(--danger); font-size: 0.75rem; }
+
+@keyframes mp-reset {
+  0%, 40% { background: rgba(255, 90, 90, 0.55); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mp-board li.reset { animation: none; outline: 1px solid var(--danger); }
+}
+
+/* Crash panel after a crash in a room: respawn instead of the results screen. */
+.mp-crash { text-align: center; }
+.mp-crash h2 { color: var(--danger); }

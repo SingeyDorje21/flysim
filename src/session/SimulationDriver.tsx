@@ -4,6 +4,7 @@ import { CalloutDetector, speak, stopSpeech } from '../audio/callouts'
 import type { FlightAudio } from '../audio/FlightAudio'
 import { getAircraft } from '../config/aircraftCatalog'
 import { useGameStore } from '../state/gameStore'
+import { sendLocalPose, useMultiplayerStore } from '../state/multiplayerStore'
 import type { FlightSession } from './FlightSession'
 
 /**
@@ -20,9 +21,18 @@ export function SimulationDriver({ session, audio }: { session: FlightSession; a
   useFrame((_, delta) => {
     const { paused, screen, overlay, settings } = useGameStore.getState()
     const frozen = paused || overlay !== 'none' || screen !== 'flight'
+    // A mid-air collision decided by the multiplayer server crashes this aircraft.
+    const { pendingCrash, consumeCrash } = useMultiplayerStore.getState()
+    if (pendingCrash) {
+      session.physics.forceCrash(pendingCrash)
+      consumeCrash()
+    }
     session.frame(delta, frozen)
 
     const s = session.physics.state
+    // Multiplayer only (no-op otherwise). A frozen sim sends nothing, so the server
+    // treats a paused player as stale: no airborne time and no collisions.
+    if (!frozen) sendLocalPose(s)
     audio.update(
       {
         engineKind,

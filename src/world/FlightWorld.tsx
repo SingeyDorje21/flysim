@@ -1,4 +1,6 @@
 import { QUALITY_PROFILES } from '../config/quality'
+import { useMultiplayerStore } from '../state/multiplayerStore'
+import { RemoteAircraft } from './remote/RemoteAircraft'
 import { AircraftModel } from './aircraft/AircraftModel'
 import { Airports } from './airport/Airports'
 import { CameraRig } from './camera/CameraRig'
@@ -35,6 +37,8 @@ function WorldContent({
 }: FlightWorldProps) {
   const profile = QUALITY_PROFILES[quality]
   const env = environmentFor(timeOfDay)
+  // Multiplayer only: the roster is empty in single player, so nothing extra mounts.
+  const hasOtherPilots = useMultiplayerStore((s) => s.roster.length > 1)
   return (
     <>
       <fog attach="fog" args={[env.fogColor, profile.fogFar * 0.25, profile.fogFar]} />
@@ -50,6 +54,7 @@ function WorldContent({
       <Clouds profile={profile} timeOfDay={timeOfDay} />
       {rings && <Rings course={rings} />}
       <AircraftModel renderState={renderState} cameraMode={cameraMode} shadows={profile.shadows} />
+      {hasOtherPilots && <RemoteAircraft terrain={terrain} shadows={profile.shadows} />}
     </>
   )
 }

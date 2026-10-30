@@ -225,6 +225,8 @@
 .mm-label { fill: var(--hud); font-size: 7px; font-family: var(--font-mono); }
 .mm-n { fill: var(--warning); font-size: 8px; font-weight: 700; font-family: var(--font-mono); }
 .mm-aircraft { fill: var(--accent); stroke: #04121d; stroke-width: 0.8; }
+.mm-other { fill: #ffd166; stroke: #04121d; stroke-width: 0.8; }
+.mm-other.crashed { fill: var(--danger); }
 .hud-nav {
   font-size: 0.78rem;
   background: var(--panel);

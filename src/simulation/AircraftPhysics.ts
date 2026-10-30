@@ -907,6 +907,11 @@ export class AircraftPhysics implements FlightModel {
     if (tv) s.thrustVector = moveTowards(s.thrustVector, clamp(tvCmd, -tv.maxAngle, tv.maxAngle), tv.rate * dt)
   }
 
+  /** Crash from outside the simulation (a multiplayer mid-air collision). No-op once crashed. */
+  forceCrash(reason: string): void {
+    if (!this.state.crashed) this.crash(reason)
+  }
+
   // -------------------------------------------------------------- internals
 
   private crash(reason: string): void {
