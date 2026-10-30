@@ -1,0 +1,25 @@
+# Render Blueprint for the FlySim multiplayer room server (server/).
+# Render dashboard -> New -> Blueprint -> pick this repository. The game itself
+# stays on Vercel; it connects to wss://flysim-rooms.onrender.com by default
+# (src/state/multiplayerStore.ts). If Render gives the service another URL,
+# set VITE_MP_SERVER_URL to it in Vercel and redeploy.
+services:
+  - type: web
+    name: flysim-rooms
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm run server
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Render's proxy appends the client address to X-Forwarded-For.
+      - key: TRUST_PROXY
+        value: "1"
+      # Only the FlySim site and its Vercel previews may connect.
+      - key: ALLOWED_ORIGINS
+        value: https://flysim.vercel.app,https://flysim-singeys-projects.vercel.app,https://flysim-*-singeys-projects.vercel.app

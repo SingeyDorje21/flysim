@@ -91,13 +91,16 @@ function loadName(): string {
   }
 }
 
-/** Where the room server lives: VITE_MP_SERVER_URL, else port 8787 on a local dev host. */
+/** The deployed room server (render.yaml). VITE_MP_SERVER_URL overrides it, e.g. if Render picked another name. */
+export const DEFAULT_SERVER_URL = 'wss://flysim-rooms.onrender.com'
+
+/** Where the room server lives: VITE_MP_SERVER_URL, else port 8787 on a local dev host, else the deployed server. */
 export function multiplayerServerUrl(): string | null {
   const env = import.meta.env?.VITE_MP_SERVER_URL as string | undefined
   if (env) return env
   const host = globalThis.location?.hostname
   if (host && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(host)) return `ws://${host}:8787`
-  return null
+  return DEFAULT_SERVER_URL
 }
 
 let client: MultiplayerClient | null = null

@@ -20,6 +20,12 @@
 .mp-code-input { font-family: var(--font-mono); letter-spacing: 0.2em; text-transform: uppercase; }
 
 .mp-actions { display: grid; gap: 12px; margin-top: 8px; }
+.mp-section { display: grid; gap: 4px; }
+.mp-note { margin: 0; font-size: 0.8rem; color: var(--text-dim); text-align: center; }
+.mp-or { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 0.8rem; }
+.mp-or::before,
+.mp-or::after { content: ''; flex: 1; border-top: 1px solid rgba(255, 255, 255, 0.15); }
+.mp-code-input::placeholder { letter-spacing: normal; text-transform: none; }
 .mp-join { display: grid; grid-template-columns: 1fr auto; align-items: end; column-gap: 8px; }
 .mp-join .field { margin: 0; }
 .mp-join .mp-hint { grid-column: 1 / -1; grid-row: 2; }
