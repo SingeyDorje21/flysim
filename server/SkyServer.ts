@@ -1,14 +1,14 @@
 /**
- * Multiplayer room logic, independent of the socket library so it can be
- * unit-tested with fake connections and a fake clock. server/index.ts wires
- * it to `ws`. Authority model: docs/adr/0001-multiplayer-room-server.md.
+ * The one shared multiplayer sky, independent of the socket library so it can
+ * be unit-tested with fake connections and a fake clock. server/index.ts wires
+ * it to `ws`. Authority model: docs/adr/0002-single-shared-sky.md.
  */
 
 import {
   collisionRadius,
   encode,
-  generateRoomCode,
   LEADERBOARD_HZ,
+  MAX_MESSAGE_BYTES,
   MAX_PLAYERS,
   parseClientMessage,
   POSE_SEND_HZ,
@@ -16,31 +16,38 @@ import {
   SERVER_TICK_HZ,
   SPAWN_GRACE_S,
   type ErrorCode,
+  type GradeKind,
   type PoseData,
   type RosterEntry,
   type ServerMessage,
 } from '../src/net/protocol'
 import type { AircraftId } from '../src/config/aircraftCatalog'
 import type { Vec3 } from '../src/simulation/types'
+import {
+  applyGrade,
+  attitude,
+  BASE_MULTIPLIER,
+  gradeLanding,
+  gradeTakeoff,
+  LANDING_MIN_LEG_S,
+  TAKEOFF_CREDIT_S,
+  type Grade,
+} from './scoring'
 
-/** What the room logic needs from a socket. */
+/** What the sky logic needs from a socket. */
 export interface Connection {
   send(data: string): void
   close(): void
 }
 
-export interface RoomServerOptions {
+export interface SkyServerOptions {
   /** Milliseconds clock. */
   now?: () => number
-  /** Room code source (tests pass a deterministic one). */
-  newCode?: () => string
-  /** create+join attempts allowed per IP per window. */
+  /** Joins allowed per IP per window. */
   joinLimit?: number
   joinWindowMs?: number
-  /** Wrong-code joins allowed per window across the whole server (slows code guessing from many IPs). */
-  globalFailedJoinLimit?: number
-  /** Rooms open at once. */
-  maxRooms?: number
+  /** Pilots in the sky at once. */
+  maxPlayers?: number
   /** Inbound messages allowed per connection per second (poses are ~15/s). */
   messageRateLimit?: number
   /** Malformed messages tolerated per minute before the connection is closed. */
@@ -66,32 +73,34 @@ interface Player {
   id: string
   conn: Connection
   ip: string
-  room: Room | null
+  joined: boolean
   name: string
   aircraftId: AircraftId
-  slot: number
   pose: PoseData | null
   poseAt: number
   /** Estimated position at the previous tick (null when not live then): collisions sweep from here. */
   tickPos: Vec3 | null
   /** Collision immunity ends at this time (ms). */
   graceUntil: number
-  /** Teleport penalty: no collisions and no airborne time until this time (ms). */
+  /** Teleport penalty: no collisions, no airborne time and no grades until this time (ms). */
   suspectUntil: number
   lastRespawnAt: number
   /** Crashed by a collision; poses can't clear it, only `respawn` can. */
   awaitingRespawn: boolean
+  /** This crash already reset the score (cleared by `respawn`). */
+  crashCounted: boolean
   seconds: number
+  multiplier: number
   resets: number
+  /** Airborne seconds of the current leg (since the last lift-off or touchdown). */
+  legSeconds: number
+  /** Attitude at the current leg's lift-off, or null if the leg didn't start on the ground. */
+  liftoff: { pitchDeg: number; bankDeg: number } | null
+  takeoffCredited: boolean
   msgWindowStart: number
   msgCount: number
   badWindowStart: number
   badMessages: number
-}
-
-interface Room {
-  code: string
-  players: Player[]
 }
 
 export interface ClientHandle {
@@ -101,7 +110,7 @@ export interface ClientHandle {
 
 const ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
-/** Random, non-sequential player id (ids are visible to every player in a room). */
+/** Random, non-sequential player id (ids are visible to every pilot). */
 function randomId(): string {
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(10))
   let id = 'p'
@@ -109,34 +118,42 @@ function randomId(): string {
   return id
 }
 
-export class RoomServer {
-  private readonly rooms = new Map<string, Room>()
+const round1 = (x: number) => Math.round(x * 10) / 10
+
+/** A protocol 1 `create` or `join` (room codes), sent by a tab loaded before the shared sky. */
+function isRoomJoin(raw: string): boolean {
+  if (raw.length > MAX_MESSAGE_BYTES) return false
+  try {
+    const x: unknown = JSON.parse(raw)
+    return typeof x === 'object' && x !== null && ['create', 'join'].includes((x as { t?: unknown }).t as string)
+  } catch {
+    return false
+  }
+}
+
+export class SkyServer {
+  private players: Player[] = []
   private readonly joinAttempts = new Map<string, number[]>()
   private readonly ids = new Set<string>()
-  private failedJoins: number[] = []
   private readonly now: () => number
-  private readonly newCode: () => string
   private readonly joinLimit: number
   private readonly joinWindowMs: number
-  private readonly globalFailedJoinLimit: number
-  private readonly maxRooms: number
+  private readonly maxPlayers: number
   private readonly messageRateLimit: number
   private readonly maxBadMessages: number
   private tickCount = 0
 
-  constructor(opts: RoomServerOptions = {}) {
+  constructor(opts: SkyServerOptions = {}) {
     this.now = opts.now ?? Date.now
-    this.newCode = opts.newCode ?? (() => generateRoomCode())
     this.joinLimit = opts.joinLimit ?? 20
     this.joinWindowMs = opts.joinWindowMs ?? 60_000
-    this.globalFailedJoinLimit = opts.globalFailedJoinLimit ?? 300
-    this.maxRooms = opts.maxRooms ?? 200
+    this.maxPlayers = Math.min(opts.maxPlayers ?? MAX_PLAYERS, MAX_PLAYERS)
     this.messageRateLimit = opts.messageRateLimit ?? 60
     this.maxBadMessages = opts.maxBadMessages ?? 20
   }
 
-  get roomCount(): number {
-    return this.rooms.size
+  get playerCount(): number {
+    return this.players.length
   }
 
   connect(conn: Connection, ip: string): ClientHandle {
@@ -147,10 +164,9 @@ export class RoomServer {
       id,
       conn,
       ip,
-      room: null,
+      joined: false,
       name: '',
       aircraftId: 'trainer',
-      slot: 0,
       pose: null,
       poseAt: 0,
       tickPos: null,
@@ -158,8 +174,13 @@ export class RoomServer {
       suspectUntil: 0,
       lastRespawnAt: -Infinity,
       awaitingRespawn: false,
+      crashCounted: false,
       seconds: 0,
+      multiplier: BASE_MULTIPLIER,
       resets: 0,
+      legSeconds: 0,
+      liftoff: null,
+      takeoffCredited: false,
       msgWindowStart: 0,
       msgCount: 0,
       badWindowStart: 0,
@@ -174,23 +195,25 @@ export class RoomServer {
     }
   }
 
-  /** Advance one server tick: collisions, airborne time, snapshots, leaderboard. */
+  /** Advance one server tick: collisions, airborne time, take-off credit, snapshots, leaderboard. */
   tick(dtS = 1 / SERVER_TICK_HZ): void {
     const now = this.now()
     this.tickCount++
-    const leaderboardDue = this.tickCount % Math.round(SERVER_TICK_HZ / LEADERBOARD_HZ) === 0
-    for (const room of this.rooms.values()) {
-      // One broken room must not take the others down.
-      try {
-        this.collide(room, now)
-        for (const p of room.players) {
-          if (this.isFlying(p, now)) p.seconds += dtS
+    try {
+      this.collide(now)
+      for (const p of this.players) {
+        if (!this.isFlying(p, now)) continue
+        p.seconds += dtS
+        p.legSeconds += dtS
+        if (p.liftoff && !p.takeoffCredited && p.legSeconds >= TAKEOFF_CREDIT_S) {
+          p.takeoffCredited = true
+          this.award(p, 'takeoff', gradeTakeoff(p.liftoff.pitchDeg, p.liftoff.bankDeg))
         }
-        this.sendSnapshots(room, now)
-        if (leaderboardDue) this.sendLeaderboard(room)
-      } catch (err) {
-        console.error(`room ${room.code} tick failed`, err)
       }
+      this.sendSnapshots(now)
+      if (this.tickCount % Math.round(SERVER_TICK_HZ / LEADERBOARD_HZ) === 0) this.sendLeaderboard()
+    } catch (err) {
+      console.error('sky tick failed', err)
     }
     this.pruneJoinAttempts(now)
   }
@@ -207,6 +230,8 @@ export class RoomServer {
 
     const msg = parseClientMessage(raw)
     if (!msg) {
+      // A tab still running protocol 1 (rooms) would otherwise wait forever: tell it to reload.
+      if (!p.joined && isRoomJoin(raw)) return this.error(p, 'VERSION_MISMATCH', 'Please reload the page')
       if (now - p.badWindowStart >= BAD_MESSAGE_WINDOW_MS) {
         p.badWindowStart = now
         p.badMessages = 0
@@ -219,33 +244,17 @@ export class RoomServer {
     }
 
     switch (msg.t) {
-      case 'create':
-      case 'join': {
-        if (p.room) return this.error(p, 'BAD_MESSAGE', 'Already in a room')
+      case 'hello': {
+        if (p.joined) return this.error(p, 'BAD_MESSAGE', 'Already in the sky')
         if (!this.allowJoin(p.ip, now)) return this.error(p, 'RATE_LIMITED', 'Too many attempts, wait a minute')
         if (msg.v !== PROTOCOL_VERSION) return this.error(p, 'VERSION_MISMATCH', 'Please reload the page')
-        let room: Room | undefined
-        if (msg.t === 'create') {
-          if (this.rooms.size >= this.maxRooms) return this.error(p, 'SERVER_FULL', 'The server is full, try later')
-          room = { code: this.uniqueCode(), players: [] }
-          this.rooms.set(room.code, room)
-        } else {
-          this.failedJoins = this.failedJoins.filter((t) => now - t < this.joinWindowMs)
-          if (this.failedJoins.length >= this.globalFailedJoinLimit)
-            return this.error(p, 'RATE_LIMITED', 'Too many attempts, wait a minute')
-          room = this.rooms.get(msg.code)
-          if (!room) {
-            this.failedJoins.push(now)
-            return this.error(p, 'BAD_CODE', 'No room with that code')
-          }
-          if (room.players.length >= MAX_PLAYERS) return this.error(p, 'ROOM_FULL', 'That room is full')
-        }
-        this.enter(p, room, msg.name, msg.aircraftId, now)
+        if (this.players.length >= this.maxPlayers) return this.error(p, 'SERVER_FULL', 'The sky is full, try later')
+        this.enter(p, msg.name, msg.aircraftId, now)
         return
       }
       case 'pose': {
-        if (!p.room) return this.error(p, 'NOT_IN_ROOM', 'Join a room first')
-        const { p: pos, q, v, onGround, crashed } = msg
+        if (!p.joined) return this.error(p, 'NOT_JOINED', 'Join the sky first')
+        const { p: pos, q, v, onGround } = msg
         const prev = p.pose
         if (prev && !prev.crashed) {
           // Floor dt at the send interval: packets delayed in transit can arrive in a burst.
@@ -253,17 +262,32 @@ export class RoomServer {
           const moved = Math.hypot(pos.x - prev.p.x, pos.y - prev.p.y, pos.z - prev.p.z)
           if (moved > MAX_PLAUSIBLE_SPEED * dt + JUMP_SLACK_M) p.suspectUntil = now + JUMP_PENALTY_MS
         }
-        p.pose = { p: pos, q, v, onGround, crashed: crashed || p.awaitingRespawn }
+        const crashed = msg.crashed || p.awaitingRespawn
+        const next: PoseData = { p: pos, q, v, onGround, crashed }
+        if (crashed) {
+          // Any crash (ground, water, hard landing) resets the score once.
+          if (!p.crashCounted) {
+            p.crashCounted = true
+            this.resetScore(p)
+            this.sendLeaderboard()
+          }
+        } else if (prev && !prev.crashed && now >= p.suspectUntil) {
+          this.detectPhase(p, prev, next)
+        }
+        p.pose = next
         p.poseAt = now
         return
       }
       case 'respawn': {
-        if (!p.room) return this.error(p, 'NOT_IN_ROOM', 'Join a room first')
+        if (!p.joined) return this.error(p, 'NOT_JOINED', 'Join the sky first')
         const afterCrash = p.awaitingRespawn || p.pose === null || p.pose.crashed
         // Without a crash, a respawn can't be spammed to stay permanently immune.
         if (!afterCrash && now - p.lastRespawnAt < RESPAWN_COOLDOWN_MS) return
         p.awaitingRespawn = false
+        p.crashCounted = false
         p.pose = null
+        p.legSeconds = 0
+        p.liftoff = null
         p.lastRespawnAt = now
         p.graceUntil = now + SPAWN_GRACE_S * 1000
         return
@@ -271,30 +295,53 @@ export class RoomServer {
     }
   }
 
-  private enter(p: Player, room: Room, name: string, aircraftId: AircraftId, now: number): void {
-    const used = new Set(room.players.map((x) => x.slot))
-    let slot = 0
-    while (used.has(slot)) slot++
-    Object.assign(p, { room, name, aircraftId, slot, pose: null, graceUntil: now + SPAWN_GRACE_S * 1000 })
+  /** Lift-off starts a leg; touchdown after a long enough leg grades the landing. */
+  private detectPhase(p: Player, prev: PoseData, next: PoseData): void {
+    if (prev.onGround && !next.onGround) {
+      p.liftoff = attitude(next.q)
+      p.legSeconds = 0
+      p.takeoffCredited = false
+    } else if (!prev.onGround && next.onGround) {
+      // The last airborne pose: its sink rate and bank are the touchdown's.
+      if (p.legSeconds >= LANDING_MIN_LEG_S) this.award(p, 'landing', gradeLanding(-prev.v.y, attitude(prev.q).bankDeg))
+      p.legSeconds = 0
+      p.liftoff = null
+    }
+  }
+
+  private award(p: Player, kind: GradeKind, grade: Grade): void {
+    p.multiplier = applyGrade(p.multiplier, grade.delta)
+    this.send(p, { t: 'grade', kind, label: grade.label, delta: grade.delta, multiplier: p.multiplier })
+    this.sendLeaderboard()
+  }
+
+  private resetScore(p: Player): void {
     p.seconds = 0
+    p.multiplier = BASE_MULTIPLIER
+    p.resets++
+    p.legSeconds = 0
+    p.liftoff = null
+  }
+
+  private enter(p: Player, name: string, aircraftId: AircraftId, now: number): void {
+    Object.assign(p, { joined: true, name, aircraftId, pose: null, graceUntil: now + SPAWN_GRACE_S * 1000 })
+    p.seconds = 0
+    p.multiplier = BASE_MULTIPLIER
     p.resets = 0
     p.awaitingRespawn = false
-    room.players.push(p)
-    this.send(p, { t: 'welcome', code: room.code, id: p.id, slot })
-    this.sendRoster(room)
-    this.sendLeaderboard(room)
+    p.crashCounted = false
+    this.players.push(p)
+    this.send(p, { t: 'welcome', id: p.id })
+    this.sendRoster()
+    this.sendLeaderboard()
   }
 
   private leave(p: Player): void {
-    const room = p.room
-    if (!room) return
-    p.room = null
-    room.players = room.players.filter((x) => x !== p)
-    if (room.players.length === 0) this.rooms.delete(room.code)
-    else {
-      this.sendRoster(room)
-      this.sendLeaderboard(room)
-    }
+    if (!p.joined) return
+    p.joined = false
+    this.players = this.players.filter((x) => x !== p)
+    this.sendRoster()
+    this.sendLeaderboard()
   }
 
   private isLive(p: Player, now: number): p is Player & { pose: PoseData } {
@@ -336,8 +383,8 @@ export class RoomServer {
     return Math.hypot(r0x + dx * t, r0y + dy * t, r0z + dz * t)
   }
 
-  private collide(room: Room, now: number): void {
-    const ps = room.players
+  private collide(now: number): void {
+    const ps = this.players
     const pos = new Map<Player, Vec3>()
     for (const p of ps) if (this.isLive(p, now)) pos.set(p, this.estimate(p, now))
     for (let i = 0; i < ps.length; i++) {
@@ -346,52 +393,51 @@ export class RoomServer {
         const b = ps[j]
         if (!this.isLive(a, now) || !this.isLive(b, now)) continue
         if (now < a.graceUntil || now < b.graceUntil) continue
-        // Two aircraft on the ground never collide (shared runway spawns).
+        // Two aircraft on the ground never collide (shared mid-runway spawns).
         if (a.pose.onGround && b.pose.onGround) continue
         const r = collisionRadius(a.aircraftId) + collisionRadius(b.aircraftId)
         const a1 = pos.get(a)!
         const b1 = pos.get(b)!
-        if (RoomServer.closestApproach(a.tickPos ?? a1, a1, b.tickPos ?? b1, b1) >= r) continue
+        if (SkyServer.closestApproach(a.tickPos ?? a1, a1, b.tickPos ?? b1, b1) >= r) continue
         for (const x of [a, b]) {
           x.awaitingRespawn = true
+          x.crashCounted = true
           x.pose.crashed = true
-          x.seconds = 0
-          x.resets++
+          this.resetScore(x)
         }
-        this.broadcast(room, { t: 'collision', a: a.id, b: b.id })
-        this.sendLeaderboard(room)
+        this.broadcast({ t: 'collision', a: a.id, b: b.id })
+        this.sendLeaderboard()
       }
     }
     // Next tick sweeps from here; a player who wasn't live (stale, penalised, crashed) starts fresh.
     for (const p of ps) p.tickPos = this.isLive(p, now) ? (pos.get(p) ?? null) : null
   }
 
-  private sendSnapshots(room: Room, now: number): void {
-    for (const p of room.players) {
-      const players = room.players
+  private sendSnapshots(now: number): void {
+    for (const p of this.players) {
+      const players = this.players
         .filter((x): x is Player & { pose: PoseData } => x !== p && x.pose !== null)
         .map((x) => ({ id: x.id, ...x.pose }))
       this.send(p, { t: 'snapshot', time: now, players })
     }
   }
 
-  private sendRoster(room: Room): void {
-    const players: RosterEntry[] = room.players.map(({ id, name, aircraftId, slot }) => ({ id, name, aircraftId, slot }))
-    this.broadcast(room, { t: 'roster', players })
+  private sendRoster(): void {
+    const players: RosterEntry[] = this.players.map(({ id, name, aircraftId }) => ({ id, name, aircraftId }))
+    this.broadcast({ t: 'roster', players })
   }
 
-  private sendLeaderboard(room: Room): void {
-    const entries = room.players
-      .map(({ id, seconds, resets }) => ({ id, seconds: Math.round(seconds * 10) / 10, resets }))
-      .sort((a, b) => b.seconds - a.seconds)
-    this.broadcast(room, { t: 'leaderboard', entries })
-  }
-
-  private uniqueCode(): string {
-    for (;;) {
-      const code = this.newCode()
-      if (!this.rooms.has(code)) return code
-    }
+  private sendLeaderboard(): void {
+    const entries = this.players
+      .map(({ id, seconds, multiplier, resets }) => ({
+        id,
+        score: round1(seconds * multiplier),
+        seconds: round1(seconds),
+        multiplier,
+        resets,
+      }))
+      .sort((a, b) => b.score - a.score)
+    this.broadcast({ t: 'leaderboard', entries })
   }
 
   private allowJoin(ip: string, now: number): boolean {
@@ -418,9 +464,9 @@ export class RoomServer {
     this.send(p, { t: 'error', code, message })
   }
 
-  private broadcast(room: Room, msg: ServerMessage): void {
+  private broadcast(msg: ServerMessage): void {
     const data = encode(msg)
-    for (const p of room.players) p.conn.send(data)
+    for (const p of this.players) p.conn.send(data)
   }
 
   private send(p: Player, msg: ServerMessage): void {

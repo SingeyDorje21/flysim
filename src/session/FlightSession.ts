@@ -14,7 +14,7 @@ import type { AircraftId } from '../config/aircraftCatalog'
 import { GRAVITY } from '../simulation/atmosphere'
 import { approachGuidance, getRunwayEnd, nearestAirport } from '../game/airportGeometry'
 import { createChallenge, type Challenge } from '../game/challenges'
-import { HOME_PLACE, spawnFor, type FlightPlace } from '../game/spawns'
+import { atMultiplayerStart, HOME_PLACE, spawnFor, type FlightPlace } from '../game/spawns'
 import { safePitchAtHeight, techniqueFor, type Technique } from '../game/technique'
 import { RING_COURSE } from '../game/courses'
 import { LESSON_MODES, type FlightResult, type GameMode, type RingCourseView } from '../game/types'
@@ -23,7 +23,6 @@ import { AircraftPhysics } from '../simulation/AircraftPhysics'
 import { FixedTimestep } from '../simulation/FixedTimestep'
 import { interpolatePose } from '../simulation/interpolate'
 import type { AircraftRenderState, ControlInputs, FlightModel, SpawnState, TerrainSampler } from '../simulation/types'
-import { spawnSlotOffset } from '../net/protocol'
 import { clearDialed, resetAutopilot, useAutopilotStore } from '../state/autopilotStore'
 import { publishTelemetry, resetTelemetry, type NavInfo } from '../state/telemetry'
 import { getTerrainSampler } from '../world/terrain/terrainSampler'
@@ -47,8 +46,8 @@ export interface FlightSessionOptions {
   place?: FlightPlace
   /** Aircraft type for this session (fixed for its lifetime). Default 'trainer'. */
   aircraft?: AircraftId
-  /** Multiplayer spawn slot: the start moves along/beside the runway so players don't overlap. */
-  spawnSlot?: number | null
+  /** Multiplayer: start mid-runway (further back for aircraft that need it) instead of at its end. */
+  multiplayerStart?: boolean
   onFinish(result: FlightResult): void
 }
 
@@ -71,7 +70,7 @@ export class FlightSession {
   private readonly timestep: FixedTimestep
   private readonly onFinish: (result: FlightResult) => void
   readonly aircraftId: AircraftId
-  private spawnSlot: number | null
+  private multiplayerStart: boolean
   /**
    * The F-22 manoeuvres routinely past the angle where its stall flags trip,
    * so it gets no stall warning or horn (its flight controls protect it).
@@ -109,7 +108,7 @@ export class FlightSession {
     this.mode = options.mode
     this.place = options.place ?? HOME_PLACE
     this.aircraftId = options.aircraft ?? 'trainer'
-    this.spawnSlot = options.spawnSlot ?? null
+    this.multiplayerStart = options.multiplayerStart ?? false
     this.stallAlerts = this.aircraftId !== 'f22'
     this.technique = techniqueFor(this.aircraftId)
     // A direct-law stick moves the elevator, a fly-by-wire stick asks for load factor (about
@@ -151,27 +150,15 @@ export class FlightSession {
     return this.mode
   }
 
-  /** Multiplayer spawn slot for the next reset(), or null for the normal spawn. */
-  setSpawnSlot(slot: number | null): void {
-    this.spawnSlot = slot
+  /** Multiplayer: whether the next reset() uses the multiplayer start. */
+  setMultiplayerStart(on: boolean): void {
+    this.multiplayerStart = on
   }
 
-  /** The spawn for `mode` at `place`, moved to this session's multiplayer slot (if any). */
+  /** The spawn for `mode` at `place`, moved to the multiplayer start when online. */
   private spawnAt(mode: GameMode, place: FlightPlace): SpawnState {
     const spawn = spawnFor(mode, place, this.aircraftId)
-    if (this.spawnSlot === null) return spawn
-    const { alongM, rightM } = spawnSlotOffset(this.spawnSlot)
-    const h = (spawn.headingDeg * Math.PI) / 180
-    // Heading 0 = north (-Z): forward = (sin h, -cos h), right = (cos h, sin h) in x/z.
-    const p = spawn.position
-    return {
-      ...spawn,
-      position: {
-        x: p.x + Math.sin(h) * alongM + Math.cos(h) * rightM,
-        y: p.y,
-        z: p.z - Math.cos(h) * alongM + Math.sin(h) * rightM,
-      },
-    }
+    return this.multiplayerStart ? atMultiplayerStart(spawn, place, this.aircraftId) : spawn
   }
 
   /** Collide with the mesh that is actually drawn (call when the quality changes). */

@@ -423,8 +423,8 @@ export function GameUI() {
   const paused = useGameStore((s) => s.paused)
   const showHud = useGameStore((s) => s.settings.showHud)
   const showInstruments = useGameStore((s) => s.settings.showInstruments)
-  const inRoom = useMultiplayerStore(
-    (s) => s.status === 'inRoom' || s.status === 'reconnecting' || s.connectionLost,
+  const online = useMultiplayerStore(
+    (s) => s.status === 'inSky' || s.status === 'reconnecting' || s.connectionLost,
   )
 
   return (
@@ -437,7 +437,7 @@ export function GameUI() {
         <>
           {showHud && <Hud />}
           {showInstruments && <InstrumentPanel />}
-          {inRoom && <MultiplayerHud />}
+          {online && <MultiplayerHud />}
           {paused && <PauseMenu />}
         </>
       )}

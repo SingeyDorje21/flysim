@@ -16,12 +16,12 @@ describe('minimap pilots', () => {
     expect(container.querySelectorAll('.mm-other')).toHaveLength(0)
   })
 
-  it('draws a dot for each other pilot in the room, marking crashed ones', () => {
+  it('draws a dot for each other pilot online, marking crashed ones', () => {
     useMultiplayerStore.setState({
       myId: 'p1',
       roster: [
-        { id: 'p1', name: 'Ace', aircraftId: 'trainer', slot: 0 },
-        { id: 'p2', name: 'Bee', aircraftId: 'trainer', slot: 1 },
+        { id: 'p1', name: 'Ace', aircraftId: 'trainer' },
+        { id: 'p2', name: 'Bee', aircraftId: 'trainer' },
       ],
     })
     remotePoses.ingest(

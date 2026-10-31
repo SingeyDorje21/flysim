@@ -1,4 +1,4 @@
-# Render Blueprint for the FlySim multiplayer room server (server/).
+# Render Blueprint for the FlySim multiplayer server (server/): one shared sky for everyone.
 # Render dashboard -> New -> Blueprint -> pick this repository. The game itself
 # stays on Vercel; it connects to wss://flysim-rooms.onrender.com by default
 # (src/state/multiplayerStore.ts). If Render gives the service another URL,

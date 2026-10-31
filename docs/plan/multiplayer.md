@@ -1,5 +1,7 @@
 # Multiplayer plan
 
+> **Superseded in part (2026-10-31):** rooms and codes are gone. Everyone now flies in one shared sky, chooses an airport and spawns mid-runway, and scores flying time x a take-off/landing multiplier. See [universal-sky.md](universal-sky.md) and [ADR 0002](../adr/0002-single-shared-sky.md).
+
 FlySim keeps its single-player game exactly as it is and adds a **Multiplayer** mode.
 A player creates a room and gets a short code to share, and others join with that code.
 Everyone flies the same island at the same time. If two aircraft touch, both crash.

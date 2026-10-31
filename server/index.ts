@@ -1,5 +1,5 @@
 /**
- * FlySim multiplayer room server: `npm run server`.
+ * FlySim multiplayer sky server (one shared world): `npm run server`.
  *
  * Env:
  *   PORT             listen port (default 8787)
@@ -14,7 +14,7 @@ import { createServer, type Server } from 'node:http'
 import { isIP } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { MAX_MESSAGE_BYTES, SERVER_TICK_HZ } from '../src/net/protocol'
-import { RoomServer } from './RoomServer'
+import { SkyServer } from './SkyServer'
 
 const PORT = Number(process.env.PORT ?? 8787)
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '')
@@ -66,10 +66,10 @@ export function originAllowed(origin: string | undefined, patterns: readonly str
 export function startServer(port = PORT): {
   http: Server
   wss: WebSocketServer
-  rooms: RoomServer
+  sky: SkyServer
   stop: () => Promise<void>
 } {
-  const rooms = new RoomServer()
+  const sky = new SkyServer()
   const http = createServer((req, res) => {
     const ok = req.method === 'GET' && (req.url === '/healthz' || req.url === '/')
     res.writeHead(ok ? 200 : 404, { 'content-type': 'text/plain' })
@@ -93,7 +93,7 @@ export function startServer(port = PORT): {
       return
     }
     perIp.set(ip, count + 1)
-    const client = rooms.connect(
+    const client = sky.connect(
       {
         send: (d) => {
           if (ws.readyState !== ws.OPEN) return
@@ -121,7 +121,7 @@ export function startServer(port = PORT): {
 
   const tick = setInterval(() => {
     try {
-      rooms.tick()
+      sky.tick()
     } catch (err) {
       console.error('tick failed', err)
     }
@@ -144,7 +144,7 @@ export function startServer(port = PORT): {
       for (const ws of wss.clients) ws.terminate()
       wss.close(() => http.close(() => resolve()))
     })
-  return { http, wss, rooms, stop }
+  return { http, wss, sky, stop }
 }
 
 // Run when executed directly (not when imported by tests).
@@ -153,5 +153,5 @@ if (process.argv[1] && /server[\\/]index\.ts$/.test(process.argv[1])) {
     console.warn('ALLOWED_ORIGINS is not set: any website can connect to this server.')
   }
   const { http } = startServer()
-  http.on('listening', () => console.log(`FlySim room server listening on ws://localhost:${PORT}`))
+  http.on('listening', () => console.log(`FlySim sky server listening on ws://localhost:${PORT}`))
 }

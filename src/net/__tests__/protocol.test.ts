@@ -3,16 +3,11 @@ import { AIRCRAFT_IDS, getAircraft } from '../../config/aircraftCatalog'
 import {
   collisionRadius,
   encode,
-  generateRoomCode,
-  isValidRoomCode,
   MAX_MESSAGE_BYTES,
   MAX_PLAYERS,
-  normalizeRoomCode,
   parseClientMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
-  ROOM_CODE_ALPHABET,
-  spawnSlotOffset,
   type ClientMessage,
   type ServerMessage,
 } from '../protocol'
@@ -25,37 +20,6 @@ const pose = {
   crashed: false,
 }
 
-describe('room codes', () => {
-  it('generates 6 symbols from the unambiguous alphabet', () => {
-    for (let i = 0; i < 200; i++) {
-      const code = generateRoomCode()
-      expect(code).toHaveLength(6)
-      expect(isValidRoomCode(code)).toBe(true)
-    }
-  })
-
-  it('rejects biased bytes instead of folding them (rejection sampling)', () => {
-    // 248..255 are above the largest multiple of 31 and must be skipped.
-    const bytes = [255, 250, 248, 0, 1, 2, 3, 4, 5]
-    const code = generateRoomCode((b) => {
-      b.fill(0)
-      b.set(bytes)
-      return b
-    })
-    expect(code).toBe(ROOM_CODE_ALPHABET.slice(0, 6))
-  })
-
-  it('normalizes case, spaces and dashes', () => {
-    expect(normalizeRoomCode(' abc-234 ')).toBe('ABC234')
-    expect(isValidRoomCode(normalizeRoomCode('abc 234'))).toBe(true)
-  })
-
-  it('refuses look-alike characters', () => {
-    expect(isValidRoomCode('ABC0O1')).toBe(false)
-    expect(isValidRoomCode('ABCDE')).toBe(false)
-  })
-})
-
 describe('geometry helpers', () => {
   it('collision radius tracks aircraft size', () => {
     for (const id of AIRCRAFT_IDS) {
@@ -65,20 +29,11 @@ describe('geometry helpers', () => {
     expect(collisionRadius('a350')).toBeGreaterThan(collisionRadius('trainer'))
   })
 
-  it('gives every slot a distinct spawn position', () => {
-    const seen = new Set<string>()
-    for (let s = 0; s < MAX_PLAYERS; s++) {
-      const o = spawnSlotOffset(s)
-      seen.add(`${o.alongM},${o.rightM}`)
-    }
-    expect(seen.size).toBe(MAX_PLAYERS)
-  })
 })
 
 describe('parseClientMessage', () => {
   const valid: ClientMessage[] = [
-    { t: 'create', v: PROTOCOL_VERSION, name: 'Ace', aircraftId: 'f22' },
-    { t: 'join', v: PROTOCOL_VERSION, code: 'ABC234', name: 'Maverick', aircraftId: 'trainer' },
+    { t: 'hello', v: PROTOCOL_VERSION, name: 'Ace', aircraftId: 'f22' },
     { t: 'pose', seq: 7, ...pose },
     { t: 'respawn' },
   ]
@@ -87,20 +42,15 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage(encode(msg))).toEqual(msg)
   })
 
-  it('normalizes the join code', () => {
-    const m = parseClientMessage(JSON.stringify({ t: 'join', v: 1, code: 'abc-234', name: 'x', aircraftId: 'a220' }))
-    expect(m).toMatchObject({ code: 'ABC234' })
-  })
-
   it.each([
     ['not json', '{'],
     ['array', '[]'],
     ['unknown type', '{"t":"nuke"}'],
-    ['unknown aircraft', JSON.stringify({ t: 'create', v: 1, name: 'a', aircraftId: 'b747' })],
-    ['empty name', JSON.stringify({ t: 'create', v: 1, name: '   ', aircraftId: 'f22' })],
-    ['long name', JSON.stringify({ t: 'create', v: 1, name: 'x'.repeat(17), aircraftId: 'f22' })],
-    ['markup in name', JSON.stringify({ t: 'create', v: 1, name: '<b>hi</b>', aircraftId: 'f22' })],
-    ['bad code', JSON.stringify({ t: 'join', v: 1, code: 'ZZ', name: 'a', aircraftId: 'f22' })],
+    ['unknown aircraft', JSON.stringify({ t: 'hello', v: 1, name: 'a', aircraftId: 'b747' })],
+    ['empty name', JSON.stringify({ t: 'hello', v: 1, name: '   ', aircraftId: 'f22' })],
+    ['long name', JSON.stringify({ t: 'hello', v: 1, name: 'x'.repeat(17), aircraftId: 'f22' })],
+    ['markup in name', JSON.stringify({ t: 'hello', v: 1, name: '<b>hi</b>', aircraftId: 'f22' })],
+    ['room join (protocol 1)', JSON.stringify({ t: 'join', v: 1, code: 'ABC234', name: 'a', aircraftId: 'f22' })],
     ['NaN position', JSON.stringify({ t: 'pose', seq: 1, ...pose, p: { x: 'NaN', y: 0, z: 0 } })],
     ['far position', JSON.stringify({ t: 'pose', seq: 1, ...pose, p: { x: 1e9, y: 0, z: 0 } })],
     ['zero quaternion', JSON.stringify({ t: 'pose', seq: 1, ...pose, q: { x: 0, y: 0, z: 0, w: 0 } })],
@@ -122,12 +72,13 @@ describe('parseClientMessage', () => {
 
 describe('parseServerMessage', () => {
   const valid: ServerMessage[] = [
-    { t: 'welcome', code: 'ABC234', id: 'p1', slot: 0 },
-    { t: 'roster', players: [{ id: 'p1', name: 'Ace', aircraftId: 'f22', slot: 0 }] },
+    { t: 'welcome', id: 'p1' },
+    { t: 'roster', players: [{ id: 'p1', name: 'Ace', aircraftId: 'f22' }] },
     { t: 'snapshot', time: 1234, players: [{ id: 'p1', ...pose }] },
     { t: 'collision', a: 'p1', b: 'p2' },
-    { t: 'leaderboard', entries: [{ id: 'p1', seconds: 12.5, resets: 1 }] },
-    { t: 'error', code: 'ROOM_FULL', message: 'Room is full' },
+    { t: 'leaderboard', entries: [{ id: 'p1', score: 18.8, seconds: 12.5, multiplier: 1.5, resets: 1 }] },
+    { t: 'grade', kind: 'landing', label: 'Good landing', delta: 0.3, multiplier: 1.55 },
+    { t: 'error', code: 'SERVER_FULL', message: 'The sky is full' },
   ]
 
   it.each(valid)('round-trips $t', (msg) => {
@@ -135,12 +86,29 @@ describe('parseServerMessage', () => {
   })
 
   it.each([
-    ['slot out of range', JSON.stringify({ t: 'welcome', code: 'ABC234', id: 'p1', slot: 8 })],
+    ['welcome without id', JSON.stringify({ t: 'welcome' })],
     ['bad id', JSON.stringify({ t: 'collision', a: 'p 1', b: 'p2' })],
-    ['too many players', JSON.stringify({ t: 'roster', players: Array(9).fill({ id: 'p1', name: 'a', aircraftId: 'f22', slot: 0 }) })],
-    ['negative seconds', JSON.stringify({ t: 'leaderboard', entries: [{ id: 'p1', seconds: -1, resets: 0 }] })],
+    ['too many players', JSON.stringify({ t: 'roster', players: Array(MAX_PLAYERS + 1).fill({ id: 'p1', name: 'a', aircraftId: 'f22' }) })],
+    ['negative seconds', JSON.stringify({ t: 'leaderboard', entries: [{ id: 'p1', score: 0, seconds: -1, multiplier: 1, resets: 0 }] })],
+    ['missing score', JSON.stringify({ t: 'leaderboard', entries: [{ id: 'p1', seconds: 1, resets: 0 }] })],
+    ['unknown grade kind', JSON.stringify({ t: 'grade', kind: 'loop', label: 'x', delta: 1, multiplier: 2 })],
     ['unknown error code', JSON.stringify({ t: 'error', code: 'LOL', message: '' })],
   ])('rejects %s', (_label, raw) => {
     expect(parseServerMessage(raw)).toBeNull()
+  })
+
+  it('accepts a full sky snapshot, larger than any client frame', () => {
+    // Realistic in-flight values (the client rounds positions to cm and quaternions to 1e-4).
+    const flying = {
+      p: { x: -31512.37, y: 1234.56, z: 11008.91 },
+      q: { x: 0.0123, y: -0.7071, z: 0.0456, w: 0.7055 },
+      v: { x: -123.45, y: -3.21, z: 98.76 },
+      onGround: false,
+      crashed: false,
+    }
+    const players = Array.from({ length: MAX_PLAYERS }, (_, i) => ({ id: `p${String(i).padStart(10, '0')}`, ...flying }))
+    const raw = encode({ t: 'snapshot', time: 1, players })
+    expect(raw.length).toBeGreaterThan(MAX_MESSAGE_BYTES)
+    expect(parseServerMessage(raw)).toMatchObject({ t: 'snapshot' })
   })
 })
