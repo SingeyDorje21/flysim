@@ -563,20 +563,6 @@ export function hingeFrameY(p0: Vector3, p1: Vector3): { m: Matrix4; origin: Vec
   return { m, origin: a.clone() }
 }
 
-/** Surface-top height of a section list at spanwise body x (for pylons). Returns mid-thickness y. */
-export function wingYAt(secs: Sec[], x: number): number {
-  for (let i = 0; i < secs.length - 1; i++) {
-    const a = Math.abs(secs[i].le[0])
-    const b = Math.abs(secs[i + 1].le[0])
-    const ax = Math.abs(x)
-    if (ax >= a && ax <= b) {
-      const f = (ax - a) / (b - a || 1)
-      return secs[i].le[1] + (secs[i + 1].le[1] - secs[i].le[1]) * f
-    }
-  }
-  return secs[secs.length - 1].le[1]
-}
-
 /** Point on the upper (sgn = 1) or lower surface at chord fraction u of the section at t. */
 export function secSurfacePoint(secs: Sec[], t: number, u: number, sgn = 1): Vector3 {
   const s = secAt(secs, t)
