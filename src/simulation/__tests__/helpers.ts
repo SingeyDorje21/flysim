@@ -57,14 +57,6 @@ export function dist2d(a: { x: number; z: number }, b: { x: number; z: number })
   return Math.hypot(a.x - b.x, a.z - b.z)
 }
 
-/** Unwrapped heading change in degrees (-180..180). */
-export function headingDelta(from: number, to: number): number {
-  let d = to - from
-  while (d > 180) d -= 360
-  while (d < -180) d += 360
-  return d
-}
-
 /**
  * Simple pitch autopilot holding a target vertical speed (PI on vertical
  * speed with pitch-rate damping). Returns a controller closure.

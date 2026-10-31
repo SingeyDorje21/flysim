@@ -20,7 +20,7 @@ import {
 import { AIRPORTS } from '../../config/airports'
 import { longestRunway } from '../../game/airportGeometry'
 import { MeshBuilder } from './meshBuilder'
-import { buildAirportPlan, papiColors, planToWorld, type AirportPlan, type LightColor, type Rgb } from './plan'
+import { buildAirportPlan, papiColors, planToWorld, type AirportPlan, type LightColor, type Rgb, Y_NUMBER } from './plan'
 
 /** Beyond this distance (m, from the runway end) markings and buildings are hidden; lights stay. */
 export const DETAIL_DISTANCE = 10000
@@ -151,7 +151,7 @@ function build(): Built {
         texCache.set(d.text, mat)
       }
       const m = new Mesh(plane, mat)
-      m.position.set(d.x, 0.056, d.z)
+      m.position.set(d.x, Y_NUMBER, d.z)
       m.rotation.y = d.rotY
       m.scale.set(d.width, 1, d.height)
       m.name = `designator-${d.text}`

@@ -123,29 +123,6 @@ export function fbm2(x: number, z: number, octaves: number, seed: number): numbe
   return sum / norm
 }
 
-/** Ridged multifractal 0..1: sharp crests where the base noise crosses zero. */
-export function ridged2(x: number, z: number, octaves: number, seed: number): number {
-  let sum = 0
-  let amp = 1
-  let norm = 0
-  let px = x
-  let pz = z
-  let weight = 1
-  for (let i = 0; i < octaves; i++) {
-    let n = 1 - Math.abs(valueNoise2(px, pz, seed + i * 211))
-    n *= n
-    n *= weight
-    weight = n * 1.6 > 1 ? 1 : n * 1.6
-    sum += amp * n
-    norm += amp
-    amp *= 0.5
-    const nx = 1.6 * px - 1.2 * pz + 13.1
-    pz = 1.2 * px + 1.6 * pz + 29.9
-    px = nx
-  }
-  return sum / norm
-}
-
 /**
  * "Eroded" fbm: each octave is damped where the accumulated slope is steep,
  * which gives smooth valleys and gullied flanks. Roughly -1..1.

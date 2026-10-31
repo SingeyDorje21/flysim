@@ -31,21 +31,6 @@ export function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t)
 }
 
-export function copyVec3(out: Vec3, a: Vec3): Vec3 {
-  out.x = a.x
-  out.y = a.y
-  out.z = a.z
-  return out
-}
-
-export function copyQuat(out: Quat, a: Quat): Quat {
-  out.x = a.x
-  out.y = a.y
-  out.z = a.z
-  out.w = a.w
-  return out
-}
-
 /** out = q * v * q^-1 (body -> world). `out` may alias `v`. */
 export function rotateVec(q: Quat, v: Vec3, out: Vec3): Vec3 {
   const qx = q.x
