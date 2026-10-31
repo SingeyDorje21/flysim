@@ -67,16 +67,18 @@ The full list is also on the **Controls** screen in the game.
 
 ## Multiplayer
 
-Single player is unchanged and needs no server. Multiplayer adds a small room server ([server/](server/)) that the browser connects to over WebSockets.
+Single player is unchanged and needs no server. Multiplayer adds a small server ([server/](server/)) that the browser connects to over WebSockets. Everyone online flies in the same sky.
 
 **How it plays**
 
-- **Rooms and codes:** choose **Multiplayer** on the main menu, enter a pilot name and pick an aircraft.
-  - **Create room** gives you a 6-character code (like `ABC234`) to share, then **Take off**.
-  - Others enter the code and **Join**, which puts them straight onto the runway.
-  - A room holds up to 8 pilots. Everyone starts on the home runway, each in their own slot.
-- **Collisions:** if two aircraft touch, both crash. The server decides, using a sphere around each aircraft scaled to its size. You get 3 seconds of immunity after joining or respawning, and two aircraft that are both on the ground never collide. After a crash, **Respawn** puts you back in your slot.
-- **Leaderboard:** ranks pilots by time spent in the air. It only counts while you're airborne, not crashed, and not paused. A mid-air collision resets **both** pilots to 0:00. Hitting the terrain only pauses your clock until you respawn. Press `L` to hide or show it.
+- **Join:** choose **Multiplayer** on the main menu. Enter a pilot name, pick an aircraft, then pick an airport and runway on the map. **Join the sky** puts you in the middle of that runway. Aircraft that need more than half of it for take-off (the airliners and business jet, and the F-22 on short runways) start further back, with their minimum runway still ahead. There are no rooms or codes: everyone online shares one world, up to 24 pilots.
+- **Score:** your score is flying time × a multiplier. The multiplier starts at ×1.0, and the server grades every take-off and landing:
+  - **Take-offs:** a clean take-off (wings level, no over-rotation) adds up to +0.25 once you've been airborne 10 s.
+  - **Landings:** after a flight of at least 30 s, a soft landing adds up to +0.5. Under 1 m/s sink is a "Butter landing"; a hard one costs 0.25.
+  - **Limits:** the multiplier stays between ×0.5 and ×5.
+  - **Display:** your score, multiplier and latest grade show under the airspeed box.
+- **Crashes and collisions:** any crash resets your score and multiplier to zero. If two aircraft touch, both crash and both reset. The server decides, using a sphere around each aircraft scaled to its size. You get 3 seconds of immunity after joining or respawning, and two aircraft that are both on the ground never collide. After a crash, **Respawn** puts you back mid-runway at your airport.
+- **Scoreboard:** hold `Tab` to see everyone online, ranked by score, with their aircraft, multiplier and flying time.
 
 **Run it locally**
 
@@ -90,28 +92,30 @@ npm run server
 npm run dev
 ```
 
-On `localhost` the game finds the server at `ws://localhost:8787` by itself. To try two pilots, open the game in two browser windows: create a room in one and join it from the other.
+On `localhost` the game finds the server at `ws://localhost:8787` by itself. To try two pilots, open the game in two browser windows and join from both.
 
 **Deploy**
 
-The site stays a static build on Vercel. Vercel can't host the always-on WebSocket room server, so that runs on [Render](https://render.com), whose free plan works without a card. [`render.yaml`](render.yaml) sets it all up.
+The site stays a static build on Vercel. Vercel can't host the always-on WebSocket server, so that runs on [Render](https://render.com), whose free plan works without a card. [`render.yaml`](render.yaml) sets it all up.
 
 1. In Render: **New → Blueprint**, then pick this repository and branch. Render creates the `flysim-rooms` service and runs `npm run server`. Health checks hit `/healthz`.
 2. That's it. The game connects to `wss://flysim-rooms.onrender.com` by default. If Render gives the service a different URL, set `VITE_MP_SERVER_URL` to it in Vercel and redeploy.
 
-On the free plan the server sleeps after about 15 minutes idle. The first room after that takes up to a minute to connect, and the lobby says so while it waits.
+On the free plan the server sleeps after about 15 minutes idle. The first join after that takes up to a minute to connect, and the lobby says so while it waits.
 
 | Setting                    | Where       | Meaning                                                                        |
 | -------------------------- | ----------- | ------------------------------------------------------------------------------ |
-| `VITE_MP_SERVER_URL`       | site build  | Room server URL. Default: `wss://flysim-rooms.onrender.com`, or `ws://localhost:8787` when the game runs on localhost |
+| `VITE_MP_SERVER_URL`       | site build  | Multiplayer server URL. Default: `wss://flysim-rooms.onrender.com`, or `ws://localhost:8787` when the game runs on localhost |
 | `PORT`                     | server      | Listen port (default `8787`)                                                   |
 | `ALLOWED_ORIGINS`          | server      | Comma-separated site origins allowed to connect. `*` matches part of a host name, e.g. `https://flysim-*-singeys-projects.vercel.app` for every preview |
 | `TRUST_PROXY`              | server      | `1` behind a proxy, so per-IP rate limits use `X-Forwarded-For`               |
 
-**Decisions you might revisit:** these are in [docs/plan/multiplayer.md](docs/plan/multiplayer.md) and [docs/adr/0001-multiplayer-room-server.md](docs/adr/0001-multiplayer-room-server.md).
-- Only mid-air collisions reset a score (D2).
-- Leaderboards last as long as the room and aren't saved anywhere (D3).
-- Rooms are capped at 8 pilots (D4).
+**Decisions you might revisit:** these are in [docs/adr/0002-single-shared-sky.md](docs/adr/0002-single-shared-sky.md), which updates [ADR 0001](docs/adr/0001-multiplayer-room-server.md).
+- The take-off and landing grades and the multiplier limits (in [server/scoring.ts](server/scoring.ts)).
+- The score lives only as long as the server process. A free-tier sleep or a redeploy clears it.
+- One sky holds 24 pilots.
+- Mid-runway spawns are multiplayer only. Single-player modes still line up at the runway end.
+- Heavier aircraft start back from the middle so their minimum runway is ahead. Where the whole runway is shorter than that, they line up at the end as in single player, and the lobby warns as it does there.
 
 ## Scripts
 

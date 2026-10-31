@@ -40,9 +40,10 @@ export interface ClientHandlers {
   onGiveUp(everOpened: boolean): void
 }
 
-export type Hello =
-  | { kind: 'create'; name: string; aircraftId: AircraftId }
-  | { kind: 'join'; code: string; name: string; aircraftId: AircraftId }
+export interface Hello {
+  name: string
+  aircraftId: AircraftId
+}
 
 /** What sendPose needs from the local aircraft state. */
 export interface LocalPose {
@@ -61,8 +62,6 @@ export class MultiplayerClient {
   private timer: ReturnType<typeof setTimeout> | null = null
   private seq = 0
   private lastPoseAt = -Infinity
-  /** Room to rejoin after a dropped connection (set by `welcome`). */
-  private roomCode: string | null = null
   private hello: Hello | null = null
   private readonly url: string
   private readonly handlers: ClientHandlers
@@ -130,20 +129,16 @@ export class MultiplayerClient {
     this.socket = s
     s.onopen = () => {
       this.everOpened = true
+      // Every (re)connect joins the one shared sky.
       const h = this.hello!
-      const code = this.roomCode ?? (h.kind === 'join' ? h.code : null)
-      if (code) this.send({ t: 'join', v: PROTOCOL_VERSION, code, name: h.name, aircraftId: h.aircraftId })
-      else this.send({ t: 'create', v: PROTOCOL_VERSION, name: h.name, aircraftId: h.aircraftId })
+      this.send({ t: 'hello', v: PROTOCOL_VERSION, name: h.name, aircraftId: h.aircraftId })
     }
     s.onmessage = (ev) => {
       if (typeof ev.data !== 'string') return
       const msg = parseServerMessage(ev.data)
       if (!msg) return
-      if (msg.t === 'welcome') {
-        this.roomCode = msg.code
-        // Only a rejoin that worked earns a fresh set of retries.
-        this.attempts = 0
-      }
+      // Only a rejoin that worked earns a fresh set of retries.
+      if (msg.t === 'welcome') this.attempts = 0
       this.handlers.onMessage(msg)
     }
     s.onerror = () => {}

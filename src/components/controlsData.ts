@@ -27,7 +27,7 @@ export const VIEW_BINDINGS: readonly Binding[] = [
   { action: 'Pause', keys: 'Esc or P' },
   { action: 'Toggle HUD / instruments', keys: 'H / I' },
   { action: 'World map', keys: 'M' },
-  { action: 'Multiplayer leaderboard', keys: 'L' },
+  { action: 'Multiplayer scoreboard (hold)', keys: 'Tab' },
 ]
 
 export const ALL_BINDINGS: readonly Binding[] = [...FLIGHT_BINDINGS, ...VIEW_BINDINGS]

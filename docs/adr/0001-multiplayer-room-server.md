@@ -1,6 +1,6 @@
 # ADR 0001 — Multiplayer room server and authority model
 
-- **Status:** Accepted, 2026-10-30
+- **Status:** Accepted, 2026-10-30. Rooms, room codes, spawn slots and the time-only leaderboard are superseded by [ADR 0002](0002-single-shared-sky.md) (one shared sky).
 - **Plan:** [docs/plan/multiplayer.md](../plan/multiplayer.md), step 1
 - **Protocol:** [src/net/protocol.ts](../../src/net/protocol.ts)
 

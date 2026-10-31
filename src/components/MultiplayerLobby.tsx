@@ -1,86 +1,42 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { AIRCRAFT_IDS, getAircraft, type AircraftId } from '../config/aircraftCatalog'
-import { isValidRoomCode, normalizeRoomCode } from '../net/protocol'
+import { getAirport } from '../config/airports'
+import { getRunwayEnd } from '../game/airportGeometry'
+import { multiplayerRunwayAhead } from '../game/spawns'
 import { useGameStore } from '../state/gameStore'
-import { enterMultiplayerFlight, useMultiplayerStore } from '../state/multiplayerStore'
+import { useMultiplayerStore } from '../state/multiplayerStore'
+import { AirportPicker } from './AirportPicker'
+import { formatRunwayLength, shortAircraftName } from './format'
 import './Multiplayer.css'
 
 /** After this long still connecting, explain that the server may be waking up. */
 const WAKE_HINT_MS = 4000
 
-/** Copy the room code; shows whether it worked. */
-export function CopyCode({ code }: { code: string }) {
-  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const copy = () => {
-    const done = navigator.clipboard?.writeText(code)
-    if (!done) return setState('failed')
-    done.then(
-      () => setState('copied'),
-      () => setState('failed'),
-    )
-  }
-  return (
-    <button type="button" className="btn mp-copy" onClick={copy} aria-label={`Copy room code ${code}`}>
-      {state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : 'Copy'}
-    </button>
-  )
-}
-
-/** Room created: share the code, then take off. */
-function RoomReady() {
-  const code = useMultiplayerStore((s) => s.code)
-  const roster = useMultiplayerStore((s) => s.roster)
-  const myId = useMultiplayerStore((s) => s.myId)
-  const leaveRoom = useMultiplayerStore((s) => s.leaveRoom)
-  if (!code) return null
-  return (
-    <div className="mp-ready">
-      <div className="field-label">Room code - share it with the other pilots</div>
-      <div className="mp-code-row">
-        <output className="mp-code" data-testid="room-code">
-          {code}
-        </output>
-        <CopyCode code={code} />
-      </div>
-      <ul className="mp-roster" aria-label="Pilots in the room">
-        {roster.map((p) => (
-          <li key={p.id}>
-            {p.name}
-            {p.id === myId && <span className="mp-you"> (you)</span>}
-            <span className="mp-roster-aircraft">{getAircraft(p.aircraftId).name}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="menu-buttons">
-        <button type="button" className="btn primary" autoFocus onClick={enterMultiplayerFlight}>
-          Take off
-        </button>
-        <button type="button" className="btn" onClick={leaveRoom}>
-          Leave room
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/** Multiplayer screen: pilot name, aircraft, then create a room or join one by code. */
+/** Multiplayer screen: pilot name, aircraft and airport, then join the one shared sky. */
 export function MultiplayerLobby() {
   const status = useMultiplayerStore((s) => s.status)
   const errorMessage = useMultiplayerStore((s) => s.errorMessage)
   const playerName = useMultiplayerStore((s) => s.playerName)
   const setPlayerName = useMultiplayerStore((s) => s.setPlayerName)
-  const createRoom = useMultiplayerStore((s) => s.createRoom)
-  const joinRoom = useMultiplayerStore((s) => s.joinRoom)
+  const joinSky = useMultiplayerStore((s) => s.joinSky)
   const clearError = useMultiplayerStore((s) => s.clearError)
   const aircraftId = useGameStore((s) => s.aircraftId)
   const selectAircraft = useGameStore((s) => s.selectAircraft)
+  const airportId = useGameStore((s) => s.airportId)
+  const runwayEnd = useGameStore((s) => s.runwayEnd)
   const goToMainMenu = useGameStore((s) => s.goToMainMenu)
-  const [code, setCode] = useState('')
-  const [codeTouched, setCodeTouched] = useState(false)
+  const units = useGameStore((s) => s.settings.units)
   const uid = useId()
 
+  const length = getRunwayEnd(airportId, runwayEnd).runway.def.length
+  const ahead = multiplayerRunwayAhead(length, aircraftId)
+  const where = `runway ${runwayEnd} at ${getAirport(airportId).name}`
+  const spawn =
+    ahead === length / 2
+      ? `Spawn: middle of ${where}`
+      : `Spawn: ${where}, ${formatRunwayLength(ahead, units)} from its end (the ${shortAircraftName(getAircraft(aircraftId).name)} needs more than half)`
+
   const busy = status === 'connecting'
-  const inRoom = status === 'inRoom' || status === 'reconnecting'
   // A free-tier server sleeps when idle and takes a while to wake: say so instead of looking stuck.
   const [slow, setSlow] = useState(false)
   useEffect(() => {
@@ -91,119 +47,78 @@ export function MultiplayerLobby() {
       setSlow(false)
     }
   }, [busy])
-  const codeOk = isValidRoomCode(normalizeRoomCode(code))
 
   const onJoin = (e: FormEvent) => {
     e.preventDefault()
-    setCodeTouched(true)
-    if (codeOk) joinRoom(code, aircraftId)
+    joinSky(aircraftId)
   }
 
   return (
-    <div className="screen screen-center">
-      <div className="panel menu-panel mp-lobby" role="region" aria-label="Multiplayer">
+    <div className="screen screen-scroll">
+      <div className="mode-header">
         <h2>Multiplayer</h2>
+        <button type="button" className="btn" onClick={goToMainMenu}>
+          Back
+        </button>
+      </div>
+
+      <form className="panel mp-lobby" role="region" aria-label="Multiplayer" onSubmit={onJoin} noValidate>
         <p className="mp-intro">
-          Fly the island together. Touch another aircraft and you both crash, and both your flying times reset to zero.
+          One sky for everyone online. Your score is flying time times your multiplier: clean take-offs and soft
+          landings raise it. Crash or touch another aircraft and it resets to zero. Hold Tab in flight to see
+          everyone&apos;s score.
         </p>
+        <div className="mp-fields">
+          <label className="field" htmlFor={`${uid}-name`}>
+            <span className="field-label">Pilot name</span>
+            <input
+              id={`${uid}-name`}
+              className="mp-input"
+              value={playerName}
+              maxLength={16}
+              autoComplete="nickname"
+              placeholder="Your call sign"
+              disabled={busy}
+              onChange={(e) => {
+                setPlayerName(e.target.value)
+                clearError()
+              }}
+            />
+          </label>
+          <label className="field" htmlFor={`${uid}-aircraft`}>
+            <span className="field-label">Aircraft</span>
+            <select
+              id={`${uid}-aircraft`}
+              className="mp-input"
+              value={aircraftId}
+              disabled={busy}
+              onChange={(e) => selectAircraft(e.target.value as AircraftId)}
+            >
+              {AIRCRAFT_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {getAircraft(id).name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </form>
 
-        {inRoom ? (
-          <RoomReady />
-        ) : (
-          <>
-            <label className="field" htmlFor={`${uid}-name`}>
-              <span className="field-label">Pilot name</span>
-              <input
-                id={`${uid}-name`}
-                className="mp-input"
-                value={playerName}
-                maxLength={16}
-                autoComplete="nickname"
-                placeholder="Your call sign"
-                disabled={busy}
-                onChange={(e) => {
-                  setPlayerName(e.target.value)
-                  clearError()
-                }}
-              />
-            </label>
-            <label className="field" htmlFor={`${uid}-aircraft`}>
-              <span className="field-label">Aircraft</span>
-              <select
-                id={`${uid}-aircraft`}
-                className="mp-input"
-                value={aircraftId}
-                disabled={busy}
-                onChange={(e) => selectAircraft(e.target.value as AircraftId)}
-              >
-                {AIRCRAFT_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {getAircraft(id).name}
-                  </option>
-                ))}
-              </select>
-            </label>
+      <AirportPicker />
 
-            <div className="mp-actions">
-              <section className="mp-section" aria-label="Create a room">
-                <button type="button" className="btn primary" disabled={busy} onClick={() => createRoom(aircraftId)}>
-                  Create room
-                </button>
-                <p className="mp-note">A room code is made for you to share. No code needed.</p>
-              </section>
-              <div className="mp-or" aria-hidden="true">
-                <span>or join a friend</span>
-              </div>
-              <form className="mp-join" onSubmit={onJoin} noValidate aria-label="Join a friend's room">
-                <label className="field" htmlFor={`${uid}-code`}>
-                  <span className="field-label">Friend's room code</span>
-                  <input
-                    id={`${uid}-code`}
-                    className="mp-input mp-code-input"
-                    value={code}
-                    maxLength={9}
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="Code they shared"
-                    disabled={busy}
-                    aria-invalid={codeTouched && !codeOk}
-                    aria-describedby={`${uid}-code-hint`}
-                    onChange={(e) => {
-                      setCode(e.target.value)
-                      clearError()
-                    }}
-                    onBlur={() => setCodeTouched(code.length > 0)}
-                  />
-                </label>
-                <span id={`${uid}-code-hint`} className="mp-hint">
-                  {codeTouched && !codeOk ? 'Codes are 6 letters and digits, like ABC234.' : ''}
-                </span>
-                <button type="submit" className="btn" disabled={busy}>
-                  Join
-                </button>
-              </form>
-            </div>
-          </>
-        )}
-
+      <div className="panel mp-join-bar">
+        <span className="mp-join-where">{spawn}</span>
+        <button type="button" className="btn primary" disabled={busy} onClick={() => joinSky(aircraftId)}>
+          Join the sky
+        </button>
         <p className="mp-status" role="status">
-          {busy
-            ? slow
-              ? 'Waking up the multiplayer server... this can take up to a minute.'
-              : 'Connecting...'
-            : status === 'reconnecting'
-              ? 'Reconnecting...'
-              : ''}
+          {busy ? (slow ? 'Waking up the multiplayer server... this can take up to a minute.' : 'Connecting...') : ''}
         </p>
         {errorMessage && (
           <p className="mp-error" role="alert">
             {errorMessage}
           </p>
         )}
-
-        <button type="button" className="btn ghost" onClick={goToMainMenu}>
-          Back
-        </button>
       </div>
     </div>
   )

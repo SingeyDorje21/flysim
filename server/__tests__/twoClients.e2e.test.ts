@@ -1,5 +1,5 @@
 /**
- * End to end: a real room server on a real port, and two real WebSocket
+ * End to end: a real sky server on a real port, and two real WebSocket
  * clients (the same MultiplayerClient the browser uses).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -77,17 +77,15 @@ async function hold(seconds: number, each: () => void) {
   }
 }
 
-describe('two pilots against a real room server', () => {
-  it('create, join by code, see each other, collide, and both scores reset', async () => {
+describe('two pilots against a real sky server', () => {
+  it('both join the one sky, see each other, collide, and both scores reset', async () => {
     const ace = new Pilot()
     const bee = new Pilot()
-    ace.client.start({ kind: 'create', name: 'Ace', aircraftId: 'trainer' })
+    ace.client.start({ name: 'Ace', aircraftId: 'trainer' })
     await until(() => !!ace.last('welcome'))
-    const code = ace.last('welcome')!.code
 
-    bee.client.start({ kind: 'join', code: code.toLowerCase(), name: 'Bee', aircraftId: 'f22' })
+    bee.client.start({ name: 'Bee', aircraftId: 'f22' })
     await until(() => !!bee.last('welcome'))
-    expect(bee.last('welcome')!.slot).toBe(1)
     await until(() => ace.last('roster')?.players.length === 2)
     expect(ace.last('roster')!.players.map((p) => p.name)).toEqual(['Ace', 'Bee'])
 
@@ -119,7 +117,7 @@ describe('two pilots against a real room server', () => {
     await until(() => !!ace.last('collision') && !!bee.last('collision'))
     expect(new Set([ace.last('collision')!.a, ace.last('collision')!.b])).toEqual(new Set([ace.id, bee.id]))
     await until(() => ace.last('leaderboard')!.entries.every((e) => e.resets === 1))
-    for (const e of ace.last('leaderboard')!.entries) expect(e.seconds).toBe(0)
+    for (const e of ace.last('leaderboard')!.entries) expect(e).toMatchObject({ seconds: 0, score: 0 })
     // Both appear crashed to the other.
     await until(() => !!bee.last('snapshot')?.players.find((p) => p.id === ace.id)?.crashed)
     expect(ace.all('collision')).toHaveLength(1)
@@ -127,14 +125,7 @@ describe('two pilots against a real room server', () => {
     ace.client.close()
     await until(() => bee.last('roster')?.players.length === 1)
     bee.client.close()
-    await until(() => server.rooms.roomCount === 0)
+    await until(() => server.sky.playerCount === 0)
   }, 20_000)
 
-  it('a wrong code is refused by the real server', async () => {
-    const cat = new Pilot()
-    cat.client.start({ kind: 'join', code: 'ZZZ999', name: 'Cat', aircraftId: 'trainer' })
-    await until(() => !!cat.last('error'))
-    expect(cat.last('error')!.code).toBe('BAD_CODE')
-    cat.client.close()
-  })
 })

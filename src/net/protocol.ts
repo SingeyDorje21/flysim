@@ -1,6 +1,6 @@
 /**
- * Multiplayer wire protocol, shared by the browser client and the room
- * server (server/ imports this file directly). See docs/adr/0001.
+ * Multiplayer wire protocol, shared by the browser client and the sky
+ * server (server/ imports this file directly). See docs/adr/0002.
  *
  * JSON text frames, one message per frame, discriminated by `t`. Every
  * inbound frame goes through parseClientMessage / parseServerMessage, which
@@ -10,10 +10,14 @@
 import { AIRCRAFT_IDS, getAircraft, type AircraftId } from '../config/aircraftCatalog'
 import type { Quat, Vec3 } from '../simulation/types'
 
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
 
-export const MAX_PLAYERS = 8
+/** Pilots in the one shared sky. */
+export const MAX_PLAYERS = 24
+/** Largest client -> server frame. */
 export const MAX_MESSAGE_BYTES = 4096
+/** Largest server -> client frame (a full sky's snapshot is bigger than a client frame). */
+export const MAX_SERVER_MESSAGE_BYTES = 64 * 1024
 /** Client pose upload rate. */
 export const POSE_SEND_HZ = 15
 /** Server collision/snapshot tick rate. */
@@ -24,59 +28,12 @@ export const LEADERBOARD_HZ = 1
 export const SPAWN_GRACE_S = 3
 
 // ---------------------------------------------------------------------------
-// Room codes
-
-/** No 0/O, 1/I/L look-alikes. */
-export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
-export const ROOM_CODE_LENGTH = 6
-const ROOM_CODE_RE = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${ROOM_CODE_LENGTH}}$`)
-
-/** Uniform random code from a CSPRNG (rejection sampling avoids modulo bias). */
-export function generateRoomCode(
-  fillRandom: (bytes: Uint8Array<ArrayBuffer>) => Uint8Array = (b) => globalThis.crypto.getRandomValues(b),
-): string {
-  const n = ROOM_CODE_ALPHABET.length
-  const limit = 256 - (256 % n)
-  let code = ''
-  while (code.length < ROOM_CODE_LENGTH) {
-    for (const byte of fillRandom(new Uint8Array(16))) {
-      if (byte < limit) code += ROOM_CODE_ALPHABET[byte % n]
-      if (code.length === ROOM_CODE_LENGTH) break
-    }
-  }
-  return code
-}
-
-/** Upper-case and strip spaces/dashes so "abc-234" and "ABC 234" both work. */
-export function normalizeRoomCode(input: string): string {
-  return input.toUpperCase().replace(/[\s-]/g, '')
-}
-
-export function isValidRoomCode(code: string): boolean {
-  return ROOM_CODE_RE.test(code)
-}
-
-// ---------------------------------------------------------------------------
 // Gameplay geometry
 
 /** Collision sphere radius around the CG (m): 0.4 x the larger of length and wingspan. */
 export function collisionRadius(aircraftId: AircraftId): number {
   const g = getAircraft(aircraftId).geometry
   return 0.4 * Math.max(g.length, g.wingspan)
-}
-
-/** Lateral spacing either side of the centreline, and spacing down the runway per pair (m). */
-const SLOT_LATERAL = 12
-const SLOT_ALONG = 80
-
-/**
- * Where slot `slot` lines up relative to the normal Free Flight spawn:
- * `alongM` metres further down the runway, `rightM` metres right of the
- * centreline (relative to the runway heading). Pairs side by side.
- */
-export function spawnSlotOffset(slot: number): { alongM: number; rightM: number } {
-  const pair = Math.floor(slot / 2)
-  return { alongM: pair * SLOT_ALONG, rightM: slot % 2 === 0 ? -SLOT_LATERAL : SLOT_LATERAL }
 }
 
 // ---------------------------------------------------------------------------
@@ -96,48 +53,45 @@ export interface RosterEntry {
   id: PlayerId
   name: string
   aircraftId: AircraftId
-  slot: number
 }
 
 export interface LeaderboardEntry {
   id: PlayerId
+  /** Airborne seconds x multiplier. */
+  score: number
   /** Airborne seconds since the last reset. */
   seconds: number
-  /** Times this player's score was reset by a collision. */
+  /** Earned by take-offs and landings; 1 after a reset. */
+  multiplier: number
+  /** Times this player's score was reset by a crash or a collision. */
   resets: number
 }
 
+export type GradeKind = 'takeoff' | 'landing'
+
 export type ClientMessage =
-  | { t: 'create'; v: number; name: string; aircraftId: AircraftId }
-  | { t: 'join'; v: number; code: string; name: string; aircraftId: AircraftId }
+  | { t: 'hello'; v: number; name: string; aircraftId: AircraftId }
   | ({ t: 'pose'; seq: number } & PoseData)
   | { t: 'respawn' }
 
-export type ErrorCode =
-  | 'BAD_CODE'
-  | 'ROOM_FULL'
-  | 'SERVER_FULL'
-  | 'RATE_LIMITED'
-  | 'BAD_MESSAGE'
-  | 'VERSION_MISMATCH'
-  | 'NOT_IN_ROOM'
+export type ErrorCode = 'SERVER_FULL' | 'RATE_LIMITED' | 'BAD_MESSAGE' | 'VERSION_MISMATCH' | 'NOT_JOINED'
 
 export const ERROR_CODES: readonly ErrorCode[] = [
-  'BAD_CODE',
-  'ROOM_FULL',
   'SERVER_FULL',
   'RATE_LIMITED',
   'BAD_MESSAGE',
   'VERSION_MISMATCH',
-  'NOT_IN_ROOM',
+  'NOT_JOINED',
 ]
 
 export type ServerMessage =
-  | { t: 'welcome'; code: string; id: PlayerId; slot: number }
+  | { t: 'welcome'; id: PlayerId }
   | { t: 'roster'; players: RosterEntry[] }
   | { t: 'snapshot'; time: number; players: ({ id: PlayerId } & PoseData)[] }
   | { t: 'collision'; a: PlayerId; b: PlayerId }
   | { t: 'leaderboard'; entries: LeaderboardEntry[] }
+  /** To one pilot: a take-off or landing changed their multiplier by `delta`. */
+  | { t: 'grade'; kind: GradeKind; label: string; delta: number; multiplier: number }
   | { t: 'error'; code: ErrorCode; message: string }
 
 export function encode(msg: ClientMessage | ServerMessage): string {
@@ -195,8 +149,8 @@ export function cleanName(x: unknown): string | null {
 const aircraft = (x: unknown): x is AircraftId => typeof x === 'string' && (AIRCRAFT_IDS as readonly string[]).includes(x)
 const playerId = (x: unknown): x is PlayerId => typeof x === 'string' && ID_RE.test(x)
 
-function parseJson(raw: string): Obj | null {
-  if (raw.length > MAX_MESSAGE_BYTES) return null
+function parseJson(raw: string, maxBytes: number): Obj | null {
+  if (raw.length > maxBytes) return null
   try {
     const x: unknown = JSON.parse(raw)
     return isObj(x) ? x : null
@@ -207,20 +161,13 @@ function parseJson(raw: string): Obj | null {
 
 /** Validate a frame from a client. Returns null for anything malformed. */
 export function parseClientMessage(raw: string): ClientMessage | null {
-  const x = parseJson(raw)
+  const x = parseJson(raw, MAX_MESSAGE_BYTES)
   if (!x) return null
   switch (x.t) {
-    case 'create': {
+    case 'hello': {
       const name = cleanName(x.name)
       if (!int(x.v, 0, 1e6) || !name || !aircraft(x.aircraftId)) return null
-      return { t: 'create', v: x.v, name, aircraftId: x.aircraftId }
-    }
-    case 'join': {
-      const name = cleanName(x.name)
-      if (!int(x.v, 0, 1e6) || !name || !aircraft(x.aircraftId) || typeof x.code !== 'string') return null
-      const code = normalizeRoomCode(x.code)
-      if (!isValidRoomCode(code)) return null
-      return { t: 'join', v: x.v, code, name, aircraftId: x.aircraftId }
+      return { t: 'hello', v: x.v, name, aircraftId: x.aircraftId }
     }
     case 'pose': {
       const p = pose(x)
@@ -247,18 +194,16 @@ function list<T>(x: unknown, max: number, item: (e: unknown) => T | null): T[] |
 
 /** Validate a frame from the server. Returns null for anything malformed. */
 export function parseServerMessage(raw: string): ServerMessage | null {
-  const x = parseJson(raw)
+  const x = parseJson(raw, MAX_SERVER_MESSAGE_BYTES)
   if (!x) return null
   switch (x.t) {
     case 'welcome':
-      if (typeof x.code !== 'string' || !isValidRoomCode(x.code) || !playerId(x.id) || !int(x.slot, 0, MAX_PLAYERS - 1))
-        return null
-      return { t: 'welcome', code: x.code, id: x.id, slot: x.slot }
+      return playerId(x.id) ? { t: 'welcome', id: x.id } : null
     case 'roster': {
       const players = list(x.players, MAX_PLAYERS, (e) => {
-        if (!isObj(e) || !playerId(e.id) || !aircraft(e.aircraftId) || !int(e.slot, 0, MAX_PLAYERS - 1)) return null
+        if (!isObj(e) || !playerId(e.id) || !aircraft(e.aircraftId)) return null
         const name = cleanName(e.name)
-        return name ? { id: e.id, name, aircraftId: e.aircraftId, slot: e.slot } : null
+        return name ? { id: e.id, name, aircraftId: e.aircraftId } : null
       })
       return players ? { t: 'roster', players } : null
     }
@@ -276,12 +221,26 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return { t: 'collision', a: x.a, b: x.b }
     case 'leaderboard': {
       const entries = list(x.entries, MAX_PLAYERS, (e) =>
-        isObj(e) && playerId(e.id) && num(e.seconds, 0, 1e9) && int(e.resets, 0, 1e9)
-          ? { id: e.id, seconds: e.seconds, resets: e.resets }
+        isObj(e) &&
+        playerId(e.id) &&
+        num(e.score, 0, 1e12) &&
+        num(e.seconds, 0, 1e9) &&
+        num(e.multiplier, 0, 100) &&
+        int(e.resets, 0, 1e9)
+          ? { id: e.id, score: e.score, seconds: e.seconds, multiplier: e.multiplier, resets: e.resets }
           : null,
       )
       return entries ? { t: 'leaderboard', entries } : null
     }
+    case 'grade':
+      if (
+        (x.kind !== 'takeoff' && x.kind !== 'landing') ||
+        typeof x.label !== 'string' ||
+        !num(x.delta, -100, 100) ||
+        !num(x.multiplier, 0, 100)
+      )
+        return null
+      return { t: 'grade', kind: x.kind, label: x.label.slice(0, 60), delta: x.delta, multiplier: x.multiplier }
     case 'error':
       if (!(ERROR_CODES as readonly unknown[]).includes(x.code) || typeof x.message !== 'string') return null
       return { t: 'error', code: x.code as ErrorCode, message: x.message.slice(0, 200) }

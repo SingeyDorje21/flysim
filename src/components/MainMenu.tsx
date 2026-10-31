@@ -141,7 +141,7 @@ export function MainMenu() {
     { label: 'Fly', hint: 'Pick an aircraft, airport and challenge', run: goToModeSelect },
     { label: 'Flight School', hint: 'Guided lessons: take-off, landing, circuit', run: goToFlightSchool },
     { label: 'Quick Flight', hint: 'Straight onto the runway in your current aircraft', run: () => startFlight('freeFlight') },
-    { label: 'Multiplayer', hint: 'Create a room or join one with a code', run: goToMultiplayer },
+    { label: 'Multiplayer', hint: 'Fly in one shared sky with everyone online', run: goToMultiplayer },
   ]
   const secondary: Action[] = [
     { label: 'How It Works', run: () => openOverlay('howItWorks') },

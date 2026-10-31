@@ -4,7 +4,7 @@ import { FlightAudio } from '../audio/FlightAudio'
 import { QUALITY_PROFILES } from '../config/quality'
 import { KeyboardControls } from '../input/keyboard'
 import { useGameStore } from '../state/gameStore'
-import { inMultiplayerRoom, sendRespawn, useMultiplayerStore } from '../state/multiplayerStore'
+import { inMultiplayer, sendRespawn, useMultiplayerStore } from '../state/multiplayerStore'
 import { FlightWorld } from '../world/FlightWorld'
 import { getTerrainSampler } from '../world/terrain/terrainSampler'
 import { FlightSession } from './FlightSession'
@@ -34,10 +34,10 @@ export function FlightCanvas() {
         mode,
         terrain,
         aircraft: useGameStore.getState().aircraftId,
-        spawnSlot: inMultiplayerRoom() ? useMultiplayerStore.getState().slot : null,
-        // In a multiplayer room a crash shows the respawn panel, not the results screen.
+        multiplayerStart: inMultiplayer(),
+        // Online a crash shows the respawn panel, not the results screen.
         onFinish: (result) => {
-          if (inMultiplayerRoom()) useMultiplayerStore.getState().reportCrash(result.reason ?? result.headline)
+          if (inMultiplayer()) useMultiplayerStore.getState().reportCrash(result.reason ?? result.headline)
           else useGameStore.getState().finishFlight(result)
         },
       }),
@@ -59,12 +59,12 @@ export function FlightCanvas() {
 
   // Start and every restart: back to the spawn, no stale state.
   useEffect(() => {
-    // The slot can change (reconnect) or go away (connection lost, flying solo).
-    const inRoom = inMultiplayerRoom()
-    session.setSpawnSlot(inRoom ? useMultiplayerStore.getState().slot : null)
+    // Online uses the multiplayer start; after a lost connection (flying solo) back to the usual line-up.
+    const online = inMultiplayer()
+    session.setMultiplayerStart(online)
     session.reset(mode, { airportId, runwayEnd })
     // Multiplayer: every (re)spawn restarts the server's collision grace window.
-    if (inRoom) sendRespawn()
+    if (online) sendRespawn()
     // A focused menu button would otherwise eat Space (brakes).
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
   }, [session, mode, flightId, airportId, runwayEnd])

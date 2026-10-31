@@ -33,21 +33,21 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('MultiplayerClient', () => {
-  it('sends create on open and delivers validated messages', () => {
+  it('sends hello on open and delivers validated messages', () => {
     const { c, got } = setup()
-    c.start({ kind: 'create', name: 'Ace', aircraftId: 'f22' })
+    c.start({ name: 'Ace', aircraftId: 'f22' })
     const s = FakeSocket.last
     s.open()
-    expect(s.sent).toEqual([{ t: 'create', v: PROTOCOL_VERSION, name: 'Ace', aircraftId: 'f22' }])
-    s.receive({ t: 'welcome', code: 'ABC234', id: 'p1', slot: 0 })
-    s.onmessage?.({ data: '{"t":"welcome","code":"bad"}' })
+    expect(s.sent).toEqual([{ t: 'hello', v: PROTOCOL_VERSION, name: 'Ace', aircraftId: 'f22' }])
+    s.receive({ t: 'welcome', id: 'p1' })
+    s.onmessage?.({ data: '{"t":"welcome","id":"bad id"}' })
     s.onmessage?.({ data: 42 })
-    expect(got).toEqual([{ t: 'welcome', code: 'ABC234', id: 'p1', slot: 0 }])
+    expect(got).toEqual([{ t: 'welcome', id: 'p1' }])
   })
 
   it('throttles poses to about 15 Hz and rounds them', () => {
     const { c } = setup()
-    c.start({ kind: 'join', code: 'ABC234', name: 'Bee', aircraftId: 'trainer' })
+    c.start({ name: 'Bee', aircraftId: 'trainer' })
     const s = FakeSocket.last
     s.open()
     for (let t = 0; t < 1000; t += 1000 / 60) c.sendPose(local, t)
@@ -59,7 +59,7 @@ describe('MultiplayerClient', () => {
 
   it('sends nothing while the socket is not open', () => {
     const { c } = setup()
-    c.start({ kind: 'create', name: 'Ace', aircraftId: 'f22' })
+    c.start({ name: 'Ace', aircraftId: 'f22' })
     c.sendPose(local, 0)
     c.sendRespawn()
     expect(FakeSocket.last.sent).toEqual([])
@@ -67,18 +67,18 @@ describe('MultiplayerClient', () => {
 
   it('gives up at once when the server was never reached', () => {
     const { c, events } = setup()
-    c.start({ kind: 'create', name: 'Ace', aircraftId: 'f22' })
+    c.start({ name: 'Ace', aircraftId: 'f22' })
     FakeSocket.last.drop()
     expect(events).toEqual(['giveUp false'])
     vi.runAllTimers()
     expect(FakeSocket.all).toHaveLength(1)
   })
 
-  it('reconnects with backoff and rejoins the same room', () => {
+  it('reconnects with backoff and says hello to the sky again', () => {
     const { c, events } = setup()
-    c.start({ kind: 'create', name: 'Ace', aircraftId: 'f22' })
+    c.start({ name: 'Ace', aircraftId: 'f22' })
     FakeSocket.last.open()
-    FakeSocket.last.receive({ t: 'welcome', code: 'ABC234', id: 'p1', slot: 0 })
+    FakeSocket.last.receive({ t: 'welcome', id: 'p1' })
     FakeSocket.last.drop()
     expect(events).toEqual(['reconnecting 1'])
     vi.advanceTimersByTime(499)
@@ -86,12 +86,12 @@ describe('MultiplayerClient', () => {
     vi.advanceTimersByTime(1)
     expect(FakeSocket.all).toHaveLength(2)
     FakeSocket.last.open()
-    expect(FakeSocket.last.sent[0]).toMatchObject({ t: 'join', code: 'ABC234', name: 'Ace' })
+    expect(FakeSocket.last.sent[0]).toEqual({ t: 'hello', v: PROTOCOL_VERSION, name: 'Ace', aircraftId: 'f22' })
   })
 
   it('stops after five failed reconnects', () => {
     const { c, events } = setup()
-    c.start({ kind: 'create', name: 'Ace', aircraftId: 'f22' })
+    c.start({ name: 'Ace', aircraftId: 'f22' })
     FakeSocket.last.open()
     // Each retry reaches the socket but drops before opening again.
     for (let i = 0; i < 6; i++) {
@@ -104,7 +104,7 @@ describe('MultiplayerClient', () => {
 
   it('close() is final: no reconnect, no events', () => {
     const { c, events } = setup()
-    c.start({ kind: 'create', name: 'Ace', aircraftId: 'f22' })
+    c.start({ name: 'Ace', aircraftId: 'f22' })
     const s = FakeSocket.last
     s.open()
     c.close()

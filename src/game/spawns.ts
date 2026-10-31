@@ -25,6 +25,34 @@ const LINEUP_OFFSET = 60
 /** Distance before the threshold where the landing approach starts (m). */
 const FINAL_DISTANCE = 3200
 
+/**
+ * Runway (m) left ahead of the multiplayer start on a runway `length` long:
+ * half of it, or the aircraft's `minRunway` when it needs more (the airliners),
+ * but never further back than the normal line-up.
+ */
+export function multiplayerRunwayAhead(length: number, aircraftId: AircraftId): number {
+  return Math.min(Math.max(length / 2, getAircraft(aircraftId).minRunway), length - LINEUP_OFFSET)
+}
+
+/**
+ * `spawn` moved to the multiplayer start on the chosen runway: on the
+ * centreline, facing the chosen end, with `multiplayerRunwayAhead` metres
+ * ahead. That is the middle of the runway unless the aircraft needs more.
+ */
+export function atMultiplayerStart(spawn: SpawnState, place: FlightPlace, aircraftId: AircraftId): SpawnState {
+  const end = getRunwayEnd(place.airportId, place.runwayEnd)
+  const { cx, cz } = end.runway.rect
+  const half = end.runway.def.length / 2
+  const d = headingVector(end.headingDeg)
+  // Negative: back from the middle, towards the threshold.
+  const along = half - multiplayerRunwayAhead(end.runway.def.length, aircraftId)
+  return {
+    ...spawn,
+    position: { x: cx + d.x * along, y: end.airport.elevation, z: cz + d.z * along },
+    headingDeg: end.headingDeg,
+  }
+}
+
 export function spawnFor(mode: GameMode, place: FlightPlace, aircraftId: AircraftId = 'trainer'): SpawnState {
   // Lessons fly the matching exercise at the aircraft's own lesson airport.
   if (mode === 'lessonTakeoff') return spawnFor('takeoff', techniqueFor(aircraftId).lessonPlace, aircraftId)
