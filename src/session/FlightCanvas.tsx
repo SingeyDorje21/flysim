@@ -1,5 +1,5 @@
-import { Canvas } from '@react-three/fiber'
-import { useEffect, useState } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { useEffect, useMemo, useState } from 'react'
 import { FlightAudio } from '../audio/FlightAudio'
 import { QUALITY_PROFILES } from '../config/quality'
 import { KeyboardControls } from '../input/keyboard'
@@ -7,12 +7,27 @@ import { useGameStore } from '../state/gameStore'
 import { inMultiplayer, sendRespawn, useMultiplayerStore } from '../state/multiplayerStore'
 import { FlightWorld } from '../world/FlightWorld'
 import { getTerrainSampler } from '../world/terrain/terrainSampler'
+import { AdaptiveResolution, MIN_DPR } from './adaptiveResolution'
 import { FlightSession } from './FlightSession'
 import { SimulationDriver } from './SimulationDriver'
 
 function flightKeysActive(): boolean {
   const s = useGameStore.getState()
   return s.screen === 'flight' && !s.paused && s.overlay === 'none'
+}
+
+/** Steps the canvas resolution down while frames run over budget, and back up when they don't. */
+function ResolutionGovernor({ maxDpr, onChange }: { maxDpr: number; onChange: (dpr: number) => void }) {
+  const governor = useMemo(
+    () => new AdaptiveResolution(Math.max(MIN_DPR, Math.min(window.devicePixelRatio || 1, maxDpr))),
+    [maxDpr],
+  )
+  useEffect(() => onChange(governor.dpr), [governor, onChange])
+  useFrame((_, delta) => {
+    const next = governor.frame(delta * 1000)
+    if (next !== null) onChange(next)
+  })
+  return null
 }
 
 /** The 3D view plus the simulation; mounted while a flight or its results are on screen. */
@@ -23,6 +38,8 @@ export function FlightCanvas() {
   const quality = useGameStore((s) => s.settings.quality)
   const invertPitch = useGameStore((s) => s.settings.invertPitch)
   const mouseSensitivity = useGameStore((s) => s.settings.mouseSensitivity)
+  // Pixel ratio chosen by the ResolutionGovernor (null until it starts).
+  const [dpr, setDpr] = useState<number | null>(null)
 
   // One ground for physics and rendering at every quality level.
   const terrain = getTerrainSampler()
@@ -112,11 +129,12 @@ export function FlightCanvas() {
       <Canvas
         // three 0.186 removed PCFSoftShadowMap; R3F's default `shadows` would warn and fall back.
         shadows="percentage"
-        dpr={[1, QUALITY_PROFILES[quality].maxDpr]}
+        dpr={dpr ?? [1, QUALITY_PROFILES[quality].maxDpr]}
         gl={{ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' }}
         camera={{ fov: 65, near: 0.2, far: 60000 }}
       >
         <SimulationDriver session={session} audio={audio} />
+        <ResolutionGovernor maxDpr={QUALITY_PROFILES[quality].maxDpr} onChange={setDpr} />
         <FlightWorld
           renderState={session.renderState}
           terrain={terrain}
