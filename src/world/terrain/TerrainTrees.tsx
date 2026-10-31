@@ -10,11 +10,14 @@ import {
   IcosahedronGeometry,
   InstancedMesh,
   MeshLambertMaterial,
+  type PerspectiveCamera,
+  Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { QualityProfile } from '../../config/quality'
 import type { TerrainSampler } from '../../simulation/types'
 import { TREE_STRIDE, TREE_TILE, TREE_TYPE_COUNT, placeTreeTile, type TreeTile } from './treePlacement'
+import { treeTileInView, treeViewFor, treeViewTurned, type TreeView } from './treeView'
 
 function paint(g: BufferGeometry, color: number): BufferGeometry {
   const c = new Color(color)
@@ -65,10 +68,20 @@ function poplar(): BufferGeometry {
 const TILE_BUDGET_MS = 2.5
 const TILE_CACHE = 900
 const RESELECT_DISTANCE = 60
+/**
+ * Trees this close to the camera (m) cast shadows. The sun's shadow map only
+ * covers about 340 m around the aircraft (Lighting.tsx), so trees further out
+ * would be drawn into it for nothing.
+ */
+const SHADOW_TREE_RADIUS = 350
+
+const _dir = new Vector3()
 
 /**
  * Instanced trees streamed by tile around the camera, within
  * profile.treeViewDistance, placed deterministically on the shared sampler.
+ * Tiles behind the camera are left out, and only the trees near the camera
+ * cast shadows (a separate set of meshes, so nothing is drawn twice).
  */
 export function TerrainTrees({ terrain, profile }: { terrain: TerrainSampler; profile: QualityProfile }) {
   const { treeDensity, treeViewDistance, shadows } = profile
@@ -79,18 +92,22 @@ export function TerrainTrees({ terrain, profile }: { terrain: TerrainSampler; pr
     // Room for every tile in view at full forest cover.
     const reach = treeViewDistance + TREE_TILE
     const capacity = Math.ceil((treeDensity * Math.PI * reach * reach * 1.15) / 1e6) + 64
-    const meshes = geometries.map((g, i) => {
-      const mesh = new InstancedMesh(g, material, capacity)
-      mesh.name = `trees-${i}`
+    // Twice the average for the shadow casters: one dense forest can fill the whole circle.
+    const nearCapacity = Math.ceil((treeDensity * Math.PI * SHADOW_TREE_RADIUS ** 2 * 2) / 1e6) + 64
+    const build = (g: BufferGeometry, name: string, size: number, castShadow: boolean) => {
+      const mesh = new InstancedMesh(g, material, size)
+      mesh.name = name
       mesh.instanceMatrix.setUsage(DynamicDrawUsage)
       mesh.setColorAt(0, new Color(1, 1, 1))
       mesh.count = 0
       mesh.frustumCulled = false
-      mesh.castShadow = shadows
+      mesh.castShadow = castShadow
       mesh.receiveShadow = false
       return mesh
-    })
-    return { geometries, material, meshes, capacity }
+    }
+    const near = geometries.map((g, i) => build(g, `trees-near-${i}`, nearCapacity, shadows))
+    const far = geometries.map((g, i) => build(g, `trees-${i}`, capacity, false))
+    return { geometries, material, near, far, meshes: [...near, ...far], capacity, nearCapacity }
   }, [treeDensity, treeViewDistance, shadows])
 
   const state = useMemo(
@@ -104,6 +121,7 @@ export function TerrainTrees({ terrain, profile }: { terrain: TerrainSampler; pr
       lastWrite: -Infinity,
       dirty: true,
       density: treeDensity,
+      view: null as TreeView | null,
     }),
     [treeDensity],
   )
@@ -124,6 +142,15 @@ export function TerrainTrees({ terrain, profile }: { terrain: TerrainSampler; pr
     const cz = camera.position.z
     const r = treeViewDistance
 
+    // Rewrite the instances when the camera turns, so the culled set follows the view.
+    camera.getWorldDirection(_dir)
+    const cam = camera as PerspectiveCamera
+    const view = treeViewFor(cx, cz, _dir.x, _dir.y, _dir.z, cam.fov ?? 65, cam.aspect ?? 1)
+    if (!state.view || treeViewTurned(state.view, view)) {
+      state.view = view
+      state.dirty = true
+    }
+
     // Wanted tiles, nearest first, when the camera has moved.
     if ((cx - state.lastX) ** 2 + (cz - state.lastZ) ** 2 > RESELECT_DISTANCE * RESELECT_DISTANCE) {
       state.lastX = cx
@@ -143,6 +170,7 @@ export function TerrainTrees({ terrain, profile }: { terrain: TerrainSampler; pr
       }
       list.sort((a, b) => a[2] - b[2])
       state.wanted = list.map(([tx, tz]) => [tx, tz])
+      state.view = view
       state.dirty = true
     }
 
@@ -165,21 +193,27 @@ export function TerrainTrees({ terrain, profile }: { terrain: TerrainSampler; pr
     state.dirty = false
     state.lastWrite = state.frame
 
-    // Rewrite the instance buffers from the ready wanted tiles.
+    // Rewrite the instance buffers from the ready wanted tiles in view.
     const counts = new Array<number>(TREE_TYPE_COUNT).fill(0)
+    const nearCounts = new Array<number>(TREE_TYPE_COUNT).fill(0)
+    const shadowR2 = SHADOW_TREE_RADIUS * SHADOW_TREE_RADIUS
     for (const [tx, tz] of state.wanted) {
       const tile = state.tiles.get(`${tx}:${tz}`)
       if (!tile) continue
       tile.used = state.frame
+      if (state.view && !treeTileInView(state.view, tx, tz)) continue
       for (let t = 0; t < TREE_TYPE_COUNT; t++) {
-        const mesh = res.meshes[t]
         const src = tile.trees[t]
-        const m = mesh.instanceMatrix.array as Float32Array
-        const col = mesh.instanceColor!.array as Float32Array
-        for (let k = 0; k < src.length && counts[t] < res.capacity; k += TREE_STRIDE) {
+        for (let k = 0; k < src.length; k += TREE_STRIDE) {
           // Only trees within the view distance (tiles reach a little beyond it).
           if ((src[k] - state.lastX) ** 2 + (src[k + 2] - state.lastZ) ** 2 > r * r) continue
-          const i = counts[t]++
+          const near = (src[k] - cx) ** 2 + (src[k + 2] - cz) ** 2 <= shadowR2
+          const mesh = near ? res.near[t] : res.far[t]
+          const used = near ? nearCounts : counts
+          if (used[t] >= (near ? res.nearCapacity : res.capacity)) continue
+          const m = mesh.instanceMatrix.array as Float32Array
+          const col = mesh.instanceColor!.array as Float32Array
+          const i = used[t]++
           const rot = src[k + 3]
           const sw = src[k + 4]
           const sh = src[k + 5]
@@ -210,15 +244,19 @@ export function TerrainTrees({ terrain, profile }: { terrain: TerrainSampler; pr
       }
     }
     for (let t = 0; t < TREE_TYPE_COUNT; t++) {
-      const mesh = res.meshes[t]
-      mesh.count = counts[t]
-      mesh.instanceMatrix.clearUpdateRanges()
-      mesh.instanceMatrix.addUpdateRange(0, counts[t] * 16)
-      mesh.instanceMatrix.needsUpdate = true
-      const ic = mesh.instanceColor!
-      ic.clearUpdateRanges()
-      ic.addUpdateRange(0, counts[t] * 3)
-      ic.needsUpdate = true
+      for (const [mesh, n] of [
+        [res.near[t], nearCounts[t]],
+        [res.far[t], counts[t]],
+      ] as const) {
+        mesh.count = n
+        mesh.instanceMatrix.clearUpdateRanges()
+        mesh.instanceMatrix.addUpdateRange(0, n * 16)
+        mesh.instanceMatrix.needsUpdate = true
+        const ic = mesh.instanceColor!
+        ic.clearUpdateRanges()
+        ic.addUpdateRange(0, n * 3)
+        ic.needsUpdate = true
+      }
     }
 
     // Bound the tile cache.
